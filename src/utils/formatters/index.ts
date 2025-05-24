@@ -1,5 +1,5 @@
-// Utility functions for formatting data
-import type { PaginationParams, PaginationMeta } from '../../types/common.js'
+// ** Types
+import type { PaginationMeta, PaginationParams } from '@/types/common'
 
 /**
  * Validates and normalizes pagination parameters
@@ -18,23 +18,19 @@ export function validatePagination(page?: string, limit?: string): PaginationPar
 
   return {
     page: parsedPage,
-    limit: parsedLimit
+    limit: parsedLimit,
   }
 }
 
 /**
  * Calculates pagination metadata
  */
-export function calculatePagination(
-  page: number,
-  limit: number,
-  total: number
-): PaginationMeta {
+export function calculatePagination(page: number, limit: number, total: number): PaginationMeta {
   return {
     page,
     limit,
     total,
-    totalPages: Math.ceil(total / limit)
+    totalPages: Math.ceil(total / limit),
   }
 }
 
@@ -66,7 +62,7 @@ export function sanitizeString(input: string): string {
 export function formatResponse<T>(data: T): T & { timestamp: string } {
   return {
     ...data,
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
   }
 }
 

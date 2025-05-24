@@ -1,14 +1,22 @@
+// ** Core Packages
 import { Hono } from 'hono'
-import { getUsers, getUserById } from './get-user.js'
-import { createUser, updateUser } from './user-profile.js'
 
-// Create user routes
-const userRoutes = new Hono()
+import { createUserRoute } from './create'
+// ** Routes
+import { getUsersRoute } from './get'
+import { getUserByIdRoute } from './get-by-id'
+import { updateUserRoute } from './update'
 
-// User routes
-userRoutes.get('/', getUsers)
-userRoutes.get('/:id', getUserById)
-userRoutes.post('/', createUser)
-userRoutes.put('/:id', updateUser)
+/**
+ * User management routes
+ * Provides endpoints for listing, retrieving, creating, and updating users
+ */
+export const userRoutes = new Hono()
 
-export { userRoutes }
+// Mount specific routes first to ensure they are matched before the :id parameter routes
+userRoutes.route('/', createUserRoute)
+userRoutes.route('/', getUsersRoute)
+
+// Register the ID-based routes
+userRoutes.route('/:id', getUserByIdRoute)
+userRoutes.route('/:id', updateUserRoute)

@@ -1,11 +1,20 @@
+// ** Core Packages
 import { Hono } from 'hono'
 import type { Context } from 'hono'
-import { userRoutes } from './user/index.js'
-import { courseRoutes } from './course/index.js'
-import { env } from '../config/environment.js'
-import type { HealthResponse } from '../types/common.js'
-import { formatResponse } from '../utils/formatters/index.js'
-import { logger } from '../utils/logs/logger.js'
+
+import { courseRoutes } from './course'
+// ** Routes
+import { userRoutes } from './user'
+
+// ** Config
+import { env } from '@/config/environment'
+
+// ** Types
+import type { HealthResponse } from '@/types/common'
+
+// ** Utils
+import { formatResponse } from '@/utils/formatters'
+import { logger } from '@/utils/logs/logger'
 
 // Create main routes
 const routes = new Hono()
@@ -18,9 +27,9 @@ routes.get('/health', (c: Context) => {
     region: env.FUNCTION_REGION || 'local',
     memory: env.FUNCTION_MEMORY || '1GB',
     environment: env.NODE_ENV,
-    cors_origins: env.CORS_ORIGINS
+    cors_origins: env.CORS_ORIGINS,
   })
-  
+
   logger.info('Health check requested')
   return c.json(response)
 })
@@ -42,10 +51,10 @@ routes.get('/', (c: Context) => {
       'GET /api/courses?page=1&limit=10&level=beginner - Get courses with optional filtering',
       'GET /api/courses/:id - Get course by ID',
       'POST /api/courses - Create new course',
-      'PUT /api/courses/:id - Update course by ID'
-    ]
+      'PUT /api/courses/:id - Update course by ID',
+    ],
   })
-  
+
   logger.info('Root endpoint accessed')
   return c.json(response)
 })

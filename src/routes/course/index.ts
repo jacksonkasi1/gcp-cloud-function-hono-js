@@ -1,14 +1,22 @@
+// ** Core Packages
 import { Hono } from 'hono'
-import { getCourses, getCourseById } from './get-course.js'
-import { createCourse, updateCourse } from './create-course.js'
 
-// Create course routes
-const courseRoutes = new Hono()
+import { createCourseRoute } from './create'
+// ** Routes
+import { getCoursesRoute } from './get'
+import { getCourseByIdRoute } from './get-by-id'
+import { updateCourseRoute } from './update'
 
-// Course routes
-courseRoutes.get('/', getCourses)
-courseRoutes.get('/:id', getCourseById)
-courseRoutes.post('/', createCourse)
-courseRoutes.put('/:id', updateCourse)
+/**
+ * Course management routes
+ * Provides endpoints for listing, retrieving, creating, and updating courses
+ */
+export const courseRoutes = new Hono()
 
-export { courseRoutes }
+// Mount specific routes first to ensure they are matched before the :id parameter routes
+courseRoutes.route('/', createCourseRoute)
+courseRoutes.route('/', getCoursesRoute)
+
+// Register the ID-based routes
+courseRoutes.route('/:id', getCourseByIdRoute)
+courseRoutes.route('/:id', updateCourseRoute)

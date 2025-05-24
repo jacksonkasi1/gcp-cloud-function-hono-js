@@ -13,7 +13,7 @@ export interface EnvironmentConfig {
 // Environment validation
 const validateEnvironment = (): EnvironmentConfig => {
   const nodeEnv = process.env.NODE_ENV as 'development' | 'production'
-  
+
   if (!nodeEnv || !['development', 'production'].includes(nodeEnv)) {
     throw new Error('NODE_ENV must be either "development" or "production"')
   }
@@ -30,8 +30,9 @@ const validateEnvironment = (): EnvironmentConfig => {
     FUNCTION_VERSION: process.env.FUNCTION_VERSION,
     FUNCTION_REGION: process.env.FUNCTION_REGION,
     FUNCTION_MEMORY: process.env.FUNCTION_MEMORY,
-    LOG_LEVEL: (process.env.LOG_LEVEL as 'debug' | 'info' | 'warn' | 'error') || getDefaultLogLevel(nodeEnv),
-    MAX_REQUEST_SIZE: process.env.MAX_REQUEST_SIZE || '10mb'
+    LOG_LEVEL:
+      (process.env.LOG_LEVEL as 'debug' | 'info' | 'warn' | 'error') || getDefaultLogLevel(nodeEnv),
+    MAX_REQUEST_SIZE: process.env.MAX_REQUEST_SIZE || '10mb',
   }
 }
 
@@ -42,22 +43,24 @@ const getCorsOrigins = (nodeEnv: 'development' | 'production'): string[] => {
       'http://localhost:3000',
       'http://localhost:3001',
       'http://127.0.0.1:3000',
-      'http://127.0.0.1:3001'
+      'http://127.0.0.1:3001',
     ]
   }
-  
+
   // Production CORS origins - should be configured via environment variables
   const prodOrigins = process.env.CORS_ORIGINS
   if (prodOrigins) {
-    return prodOrigins.split(',').map(origin => origin.trim())
+    return prodOrigins.split(',').map((origin) => origin.trim())
   }
-  
+
   // Default production origins (restrictive)
   return []
 }
 
 // Get default log level based on environment
-const getDefaultLogLevel = (nodeEnv: 'development' | 'production'): 'debug' | 'info' | 'warn' | 'error' => {
+const getDefaultLogLevel = (
+  nodeEnv: 'development' | 'production'
+): 'debug' | 'info' | 'warn' | 'error' => {
   return nodeEnv === 'development' ? 'debug' : 'info'
 }
 
@@ -87,5 +90,5 @@ export const log = {
   },
   error: (message: string, ...args: unknown[]) => {
     console.error(`[ERROR] ${message}`, ...args)
-  }
+  },
 }

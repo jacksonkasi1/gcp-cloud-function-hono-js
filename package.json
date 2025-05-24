@@ -1,0 +1,39 @@
+{
+  "name": "gcp-hono-serverless",
+  "version": "1.0.0",
+  "description": "Serverless Node.js application using Hono.js framework for GCP Cloud Functions",
+  "main": "src/index.js",
+  "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "build": "echo 'No build step required for this project'",
+    "test": "echo 'Tests not implemented yet'",
+    "deploy": "bash scripts/deploy.sh",
+    "destroy": "bash scripts/destroy.sh",
+    "tf-init": "cd terraform && terraform init",
+    "tf-plan": "cd terraform && terraform plan",
+    "tf-apply": "cd terraform && terraform apply",
+    "tf-destroy": "cd terraform && terraform destroy"
+  },
+  "dependencies": {
+    "hono": "^4.0.0",
+    "@hono/node-server": "^1.8.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0"
+  },
+  "keywords": [
+    "serverless",
+    "gcp",
+    "cloud-functions",
+    "hono",
+    "nodejs",
+    "terraform"
+  ],
+  "author": "Your Name",
+  "license": "MIT"
+}

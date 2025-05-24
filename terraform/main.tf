@@ -87,21 +87,35 @@ resource "google_storage_bucket" "function_bucket" {
 
 # Create source code archive
 data "archive_file" "function_source" {
-  type        = "zip"
-  source_dir  = "../"
-  output_path = "../dist/function-source.zip"
-  excludes = [
-    "terraform/",
-    "scripts/",
-    "dist/",
-    ".git/",
-    ".gitignore",
-    "README.md",
-    "*.md",
-    ".terraform/",
-    "*.tfstate*",
-    "*.tfvars"
-  ]
+  type             = "zip"
+  output_path      = "../dist/function-source.zip"
+  output_file_mode = "0644"
+  
+  source {
+    content  = file("../package.json")
+    filename = "package.json"
+  }
+  
+  source {
+    content  = file("../pnpm-lock.yaml")
+    filename = "pnpm-lock.yaml"
+  }
+  
+  dynamic "source" {
+    for_each = fileset("../dist", "**/*.js")
+    content {
+      content  = file("../dist/${source.value}")
+      filename = source.value
+    }
+  }
+  
+  dynamic "source" {
+    for_each = fileset("../src", "**/*.ts")
+    content {
+      content  = file("../src/${source.value}")
+      filename = "src/${source.value}"
+    }
+  }
 }
 
 # Upload source code to bucket
@@ -138,7 +152,8 @@ resource "google_cloudfunctions2_function" "hono_function" {
     max_instance_count = var.function_max_instances != null ? var.function_max_instances : var.max_instances
     min_instance_count = var.function_min_instances != null ? var.function_min_instances : var.min_instances
     
-    available_memory   = local.memory_mb
+    available_memory   = "${local.memory_mb}Mi"
+    available_cpu      = local.memory_mb >= 1024 ? "1" : "0.083"
     timeout_seconds    = var.function_timeout != null ? var.function_timeout : var.timeout_seconds
     
     environment_variables = merge({

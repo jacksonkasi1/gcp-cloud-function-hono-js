@@ -1,0 +1,49 @@
+# Dockerfile for CI/CD environments
+# Provides consistent build environment across different CI platforms
+
+FROM node:20-alpine
+
+# Install system dependencies
+RUN apk add --no-cache \
+    bash \
+    curl \
+    git \
+    unzip \
+    wget \
+    ca-certificates
+
+# Install pnpm globally
+RUN npm install -g pnpm@latest
+
+# Install Terraform
+RUN wget https://releases.hashicorp.com/terraform/1.6.0/terraform_1.6.0_linux_amd64.zip && \
+    unzip terraform_1.6.0_linux_amd64.zip && \
+    mv terraform /usr/local/bin/ && \
+    rm terraform_1.6.0_linux_amd64.zip
+
+# Install Google Cloud SDK
+RUN wget https://dl.google.com/dl/cloudsdk/channels/rapid/downloads/google-cloud-cli-456.0.0-linux-x86_64.tar.gz && \
+    tar -xzf google-cloud-cli-456.0.0-linux-x86_64.tar.gz && \
+    ./google-cloud-sdk/install.sh --quiet && \
+    rm google-cloud-cli-456.0.0-linux-x86_64.tar.gz
+
+# Add gcloud to PATH
+ENV PATH="/google-cloud-sdk/bin:${PATH}"
+
+# Set working directory
+WORKDIR /app
+
+# Copy package files
+COPY package.json pnpm-lock.yaml ./
+
+# Install dependencies
+RUN pnpm install --frozen-lockfile
+
+# Copy source code
+COPY . .
+
+# Build the application
+RUN pnpm run build
+
+# Default command
+CMD ["pnpm", "start"]

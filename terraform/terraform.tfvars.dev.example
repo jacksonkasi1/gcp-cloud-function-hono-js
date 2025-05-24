@@ -1,0 +1,30 @@
+# Development Environment Configuration Example
+# Copy this file to terraform.tfvars.dev and update with your actual values
+
+project_id = "your-gcp-project-id"
+region     = "asia-south1"
+function_name = "hono-serverless-api-dev"
+environment = "dev"
+deployment_version = "dev-latest"
+
+# Development-specific settings
+function_memory = "1GB"
+function_timeout = 60
+function_max_instances = 10
+function_min_instances = 0
+
+# Environment variables for the function
+environment_variables = {
+  NODE_ENV = "development"
+  LOG_LEVEL = "debug"
+  MAX_REQUEST_SIZE = "10mb"
+  CORS_ORIGINS = "http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000,http://127.0.0.1:3001"
+}
+
+# Labels for resource management
+labels = {
+  environment = "development"
+  team        = "backend"
+  project     = "hono-serverless"
+  managed-by  = "terraform"
+}

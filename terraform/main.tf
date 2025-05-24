@@ -19,6 +19,16 @@ provider "google" {
   region  = var.region
 }
 
+# Local values for computed variables
+locals {
+  # Convert memory format (1GB -> 1024, 2GB -> 2048, etc.)
+  memory_mb = var.function_memory != null ? (
+    can(regex("GB$", var.function_memory)) ?
+    tonumber(regex("^([0-9]+)", var.function_memory)[0]) * 1024 :
+    tonumber(regex("^([0-9]+)", var.function_memory)[0])
+  ) : var.memory_mb
+}
+
 # Enable required APIs
 resource "google_project_service" "cloud_functions_api" {
   service = "cloudfunctions.googleapis.com"
@@ -69,6 +79,10 @@ resource "google_storage_bucket" "function_bucket" {
       type = "Delete"
     }
   }
+  
+  labels = merge(var.labels, {
+    component = "storage"
+  })
 }
 
 # Create source code archive
@@ -116,19 +130,22 @@ resource "google_cloudfunctions2_function" "hono_function" {
     }
   }
   
+  labels = merge(var.labels, {
+    component = "function"
+  })
+  
   service_config {
-    max_instance_count = var.max_instances
-    min_instance_count = var.min_instances
+    max_instance_count = var.function_max_instances != null ? var.function_max_instances : var.max_instances
+    min_instance_count = var.function_min_instances != null ? var.function_min_instances : var.min_instances
     
-    available_memory   = var.memory_mb
-    timeout_seconds    = var.timeout_seconds
+    available_memory   = local.memory_mb
+    timeout_seconds    = var.function_timeout != null ? var.function_timeout : var.timeout_seconds
     
-    environment_variables = {
-      NODE_ENV          = "production"
+    environment_variables = merge({
       FUNCTION_VERSION  = var.deployment_version
       FUNCTION_REGION   = var.region
-      FUNCTION_MEMORY   = "${var.memory_mb}MB"
-    }
+      FUNCTION_MEMORY   = var.function_memory != null ? var.function_memory : "${var.memory_mb}MB"
+    }, var.environment_variables)
     
     ingress_settings               = "ALLOW_ALL"
     all_traffic_on_latest_revision = true

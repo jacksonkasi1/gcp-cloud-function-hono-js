@@ -79,3 +79,49 @@ variable "environment" {
     error_message = "Environment must be one of: dev, staging, prod."
   }
 }
+
+variable "function_memory" {
+  description = "Memory allocation for the function (e.g., 1GB, 2GB)"
+  type        = string
+  default     = "1GB"
+  
+  validation {
+    condition = can(regex("^(128|256|512|1024|2048|4096|8192)MB$|^(1|2|4|8)GB$", var.function_memory))
+    error_message = "Memory must be one of: 128MB, 256MB, 512MB, 1GB, 2GB, 4GB, 8GB."
+  }
+}
+
+variable "function_timeout" {
+  description = "Function timeout in seconds"
+  type        = number
+  default     = 60
+  
+  validation {
+    condition     = var.function_timeout >= 1 && var.function_timeout <= 540
+    error_message = "Timeout must be between 1 and 540 seconds."
+  }
+}
+
+variable "function_max_instances" {
+  description = "Maximum number of function instances"
+  type        = number
+  default     = 100
+}
+
+variable "function_min_instances" {
+  description = "Minimum number of function instances"
+  type        = number
+  default     = 0
+}
+
+variable "environment_variables" {
+  description = "Environment variables for the function"
+  type        = map(string)
+  default     = {}
+}
+
+variable "labels" {
+  description = "Labels to apply to resources"
+  type        = map(string)
+  default     = {}
+}

@@ -1,0 +1,54 @@
+# =============================================================================
+# GCP Hono.js Serverless Application - Terraform Variables
+# =============================================================================
+# Copy this file to terraform.tfvars and update with your actual values
+# =============================================================================
+
+# GCP Project Configuration
+# REQUIRED: Replace with your actual GCP project ID
+project_id = "your-gcp-project-id"
+
+# Target region for deployment (optimized for Asia South)
+region = "asia-south1"
+
+# Function Configuration
+function_name    = "hono-serverless-api"
+memory_mb        = "1024"                    # 1GB memory allocation as required
+timeout_seconds  = 60                       # Function timeout (1-540 seconds)
+max_instances    = 100                      # Maximum concurrent instances
+min_instances    = 0                        # Minimum instances (0 for cost optimization)
+
+# Version Management
+deployment_version     = "v1.0.0"           # Initial deployment version
+max_versions_to_keep  = 5                   # Number of versions to retain in storage
+enable_version_cleanup = true               # Enable automatic cleanup of old versions
+
+# Environment Configuration
+environment = "prod"                        # Environment identifier (dev/staging/prod)
+
+# =============================================================================
+# Optional Advanced Configuration
+# =============================================================================
+
+# Uncomment and modify these if you need custom settings:
+
+# Custom function name with environment suffix
+# function_name = "hono-api-prod"
+
+# Different memory allocation (valid options: 128, 256, 512, 1024, 2048, 4096, 8192)
+# memory_mb = "2048"
+
+# Extended timeout for long-running operations
+# timeout_seconds = 300
+
+# Higher concurrency for high-traffic applications
+# max_instances = 1000
+
+# Keep minimum instances warm for better performance (increases cost)
+# min_instances = 1
+
+# Keep more versions for rollback capability
+# max_versions_to_keep = 10
+
+# Different region (if not using asia-south1)
+# region = "us-central1"

@@ -29,8 +29,120 @@ gcp-hono-serverless/
 ├── package.json                # Node.js dependencies and scripts
 └── README.md                   # This file
 ```
+## 📜 Scripts Overview
 
-## 🛠 Prerequisites
+The `scripts/` directory contains essential automation tools for managing your serverless application lifecycle. Each script serves a specific purpose in the development and deployment workflow:
+
+### 🚀 [`deploy.sh`](scripts/deploy.sh:1) - Comprehensive Deployment Script
+**Purpose**: Automates the complete deployment process to GCP Cloud Functions with version management.
+
+**What it does:**
+- **Prerequisites Check**: Validates Node.js 20+, Terraform, gcloud CLI installation and authentication
+- **Configuration Validation**: Ensures `terraform.tfvars` is properly configured with valid project ID
+- **Dependency Management**: Installs Node.js dependencies automatically
+- **Version Management**: Auto-increments version numbers and tracks deployments in `.deployment-version`
+- **Infrastructure Deployment**: Creates/updates GCP resources using Terraform
+- **Health Validation**: Tests deployed function endpoints to ensure they're working
+- **Cleanup**: Removes temporary files and prunes old deployment versions
+- **Comprehensive Logging**: Detailed logs saved to `deployment.log` for troubleshooting
+
+**Usage:**
+```bash
+npm run deploy
+# or
+bash scripts/deploy.sh
+```
+
+### 🗑️ [`destroy.sh`](scripts/destroy.sh:1) - Infrastructure Destruction Script
+**Purpose**: Safely removes all GCP infrastructure and cleans up resources to prevent ongoing costs.
+
+**What it does:**
+- **Safety Confirmation**: Prompts for confirmation before destroying resources (unless `--force` used)
+- **Storage Cleanup**: Empties Cloud Storage buckets before deletion
+- **Infrastructure Removal**: Uses Terraform to destroy all GCP resources
+- **State Management**: Optionally cleans up Terraform state files
+- **Version Cleanup**: Optionally removes version tracking files
+- **Log Cleanup**: Optionally removes deployment logs
+- **Cost Prevention**: Ensures no resources are left running to incur charges
+
+**Usage:**
+```bash
+npm run destroy
+# or
+bash scripts/destroy.sh
+
+# Advanced options:
+bash scripts/destroy.sh --force --clean-all  # Skip confirmation, clean everything
+```
+
+### ✅ [`validate.sh`](scripts/validate.sh:1) - Project Validation Script
+**Purpose**: Pre-deployment health check that validates your entire setup is ready for deployment.
+
+**What it validates:**
+- **Project Structure**: Ensures all required files exist in correct locations
+- **Node.js Environment**: Checks Node.js 20+ version and npm installation
+- **Dependencies**: Verifies Hono.js dependencies are installed and configured
+- **Terraform Configuration**: Tests syntax and validates variable configuration
+- **GCP Setup**: Confirms gcloud authentication and project access
+- **Source Code**: Validates Hono.js imports, required routes, and Cloud Function exports
+- **Scripts**: Checks deployment scripts are properly configured
+
+**Why use it:**
+- **Prevents Deployment Failures**: Catches issues before expensive deployment attempts
+- **Saves Time**: Identifies configuration problems early in the process
+- **Production Safety**: Ensures critical settings like memory allocation are correct
+
+**Usage:**
+```bash
+bash scripts/validate.sh
+```
+
+### 🔧 [`dev.sh`](scripts/dev.sh:1) - Local Development Server (Unix/Linux/macOS)
+**Purpose**: Starts the Hono.js application locally for development and testing.
+
+**What it does:**
+- **Environment Setup**: Configures development environment variables
+- **Dependency Check**: Ensures Node.js 20+ and dependencies are installed
+- **Auto-install**: Installs dependencies if `node_modules` is missing
+- **Development Server**: Starts server with hot-reload on port 8080
+- **Endpoint Information**: Displays available API endpoints for testing
+
+**Usage:**
+```bash
+npm run dev
+# or
+bash scripts/dev.sh
+```
+
+### 🔧 [`dev.bat`](scripts/dev.bat:1) - Local Development Server (Windows)
+**Purpose**: Windows batch file equivalent of `dev.sh` for Windows users.
+
+**What it does:**
+- Same functionality as `dev.sh` but optimized for Windows Command Prompt
+- **Windows Compatibility**: Uses Windows-specific commands and path handling
+- **Visual Feedback**: Provides clear console output with Windows-friendly formatting
+
+**Usage:**
+```cmd
+npm run dev
+REM or
+scripts\dev.bat
+```
+
+## 🔄 Script Workflow
+
+**Typical Development Workflow:**
+1. **Validate Setup**: `bash scripts/validate.sh` - Ensure everything is configured
+2. **Local Development**: `npm run dev` - Test changes locally
+3. **Deploy**: `npm run deploy` - Deploy to GCP when ready
+4. **Cleanup**: `npm run destroy` - Remove infrastructure when done
+
+**Production Deployment:**
+1. **Pre-deployment Check**: `bash scripts/validate.sh`
+2. **Deploy**: `bash scripts/deploy.sh`
+3. **Monitor**: Check deployment logs and function URLs
+
+##  Prerequisites
 
 Before deploying this application, ensure you have:
 

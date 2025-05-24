@@ -1,8 +1,11 @@
 {
   "compilerOptions": {
     "target": "ES2022",
+    "lib": ["ES2022"],
     "module": "ESNext",
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
+    "types": ["node"],
+    "typeRoots": ["./node_modules/@types"],
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
     "allowJs": true,
@@ -26,19 +29,23 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "verbatimModuleSyntax": true,
+    "allowImportingTsExtensions": false,
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
     }
   },
   "include": [
-    "src/**/*"
+    "src/**/*",
+    "src/**/*.ts"
   ],
   "exclude": [
     "node_modules",
     "dist",
     "terraform",
     "scripts"
-  ]
+  ],
+  "ts-node": {
+    "esm": true
+  }
 }

@@ -61,7 +61,7 @@ validate_project_structure() {
     
     local required_files=(
         "package.json"
-        "src/index.js"
+        "src/index.ts"
         "terraform/main.tf"
         "terraform/variables.tf"
         "terraform/outputs.tf"
@@ -108,7 +108,7 @@ validate_nodejs_setup() {
     
     # Check package.json
     if [ -f "$PROJECT_ROOT/package.json" ]; then
-        if node -e "JSON.parse(require('fs').readFileSync('$PROJECT_ROOT/package.json', 'utf8'))" &> /dev/null; then
+        if cd "$PROJECT_ROOT" && node -e "JSON.parse(require('fs').readFileSync('package.json', 'utf8'))" &> /dev/null; then
             log "PASS" "package.json is valid JSON"
         else
             log "FAIL" "package.json is invalid JSON"
@@ -216,36 +216,36 @@ validate_gcp_setup() {
 validate_source_code() {
     log "INFO" "Validating source code..."
     
-    # Check main application file
-    if [ -f "$PROJECT_ROOT/src/index.js" ]; then
+    # Check main application file (TypeScript)
+    if [ -f "$PROJECT_ROOT/src/index.ts" ]; then
         # Check for required imports
-        if grep -q "from 'hono'" "$PROJECT_ROOT/src/index.js"; then
-            log "PASS" "Hono.js import found in src/index.js"
+        if grep -q "from 'hono'" "$PROJECT_ROOT/src/index.ts" || grep -q "from \"hono\"" "$PROJECT_ROOT/src/index.ts"; then
+            log "PASS" "Hono.js import found in src/index.ts"
         else
-            log "FAIL" "Hono.js import missing from src/index.js"
+            log "FAIL" "Hono.js import missing from src/index.ts"
         fi
         
-        if grep -q "from '@hono/node-server'" "$PROJECT_ROOT/src/index.js"; then
-            log "PASS" "@hono/node-server import found in src/index.js"
+        if grep -q "from '@hono/node-server'" "$PROJECT_ROOT/src/index.ts" || grep -q "from \"@hono/node-server\"" "$PROJECT_ROOT/src/index.ts"; then
+            log "PASS" "@hono/node-server import found in src/index.ts"
         else
-            log "FAIL" "@hono/node-server import missing from src/index.js"
+            log "FAIL" "@hono/node-server import missing from src/index.ts"
         fi
         
         # Check for required routes
-        if grep -q "/health" "$PROJECT_ROOT/src/index.js"; then
+        if grep -q "/health" "$PROJECT_ROOT/src/index.ts"; then
             log "PASS" "Health check route found"
         else
             log "FAIL" "Health check route missing"
         fi
         
-        if grep -q "/api/users" "$PROJECT_ROOT/src/index.js"; then
+        if grep -q "/api/users" "$PROJECT_ROOT/src/index.ts" || grep -q "/users" "$PROJECT_ROOT/src/index.ts"; then
             log "PASS" "Users API route found"
         else
             log "FAIL" "Users API route missing"
         fi
         
         # Check for export
-        if grep -q "export default" "$PROJECT_ROOT/src/index.js"; then
+        if grep -q "export default" "$PROJECT_ROOT/src/index.ts"; then
             log "PASS" "Default export found for Cloud Functions"
         else
             log "FAIL" "Default export missing (required for Cloud Functions)"

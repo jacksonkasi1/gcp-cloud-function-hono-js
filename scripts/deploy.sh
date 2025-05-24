@@ -219,7 +219,7 @@ install_dependencies() {
     fi
     
     # Install all dependencies (including dev dependencies for build)
-    npm install
+    pnpm install
     log "INFO" "Dependencies installed successfully"
 }
 
@@ -294,7 +294,7 @@ deploy_infrastructure() {
     local function_url=$(terraform output -raw function_url)
     local health_check_url=$(terraform output -raw health_check_url)
     local api_users_url=$(terraform output -raw api_users_url)
-    
+
     log "INFO" "Deployment completed successfully!"
     log "INFO" "Function URL: $function_url"
     log "INFO" "Health Check: $health_check_url"

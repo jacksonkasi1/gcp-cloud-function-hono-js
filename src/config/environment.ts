@@ -50,7 +50,7 @@ const getCorsOrigins = (nodeEnv: 'development' | 'production'): string[] => {
   // Production CORS origins - should be configured via environment variables
   const prodOrigins = process.env.CORS_ORIGINS
   if (prodOrigins) {
-    return prodOrigins.split(',').map((origin) => origin.trim())
+    return prodOrigins.split(',').map((origin: string) => origin.trim())
   }
 
   // Default production origins (restrictive)

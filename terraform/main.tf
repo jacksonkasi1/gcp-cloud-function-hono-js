@@ -50,26 +50,6 @@ resource "google_project_service" "cloud_run_api" {
   disable_dependent_services = true
   disable_on_destroy         = false
 }
-# Get the Cloud Build service account
-data "google_project" "project" {}
-
-# Grant necessary permissions to Cloud Build service account
-resource "google_project_iam_member" "cloudbuild_logs_writer" {
-  project = var.project_id
-  role    = "roles/logging.logWriter"
-  member  = "serviceAccount:${data.google_project.project.number}@cloudbuild.gserviceaccount.com"
-  
-  depends_on = [google_project_service.cloud_build_api]
-}
-
-resource "google_project_iam_member" "cloudbuild_source_reader" {
-  project = var.project_id
-  role    = "roles/source.reader"
-  member  = "serviceAccount:${data.google_project.project.number}@cloudbuild.gserviceaccount.com"
-  
-  depends_on = [google_project_service.cloud_build_api]
-}
-
 # Create a Cloud Storage bucket for storing function source code
 resource "google_storage_bucket" "function_bucket" {
   name     = "${var.project_id}-${var.function_name}-source"

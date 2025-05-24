@@ -591,7 +591,209 @@ bash scripts/destroy.sh --clean-all
 bash scripts/destroy.sh --clean-state
 ```
 
-## 🐛 Troubleshooting
+## 🔐 IAM Permissions Setup
+
+### Required IAM Permissions for Cloud Functions Deployment
+
+Before deploying Cloud Functions, you need to configure specific IAM permissions for the Cloud Build service account. This is a **one-time setup** required for your GCP project.
+
+#### Why These Permissions Are Needed
+
+Cloud Functions Gen 2 uses Cloud Build to compile and deploy your code. The Cloud Build service account needs specific permissions to:
+- Write build logs to Cloud Logging
+- Read source code from repositories
+- Create and manage Cloud Run services (Cloud Functions Gen 2 backend)
+
+#### Step-by-Step IAM Setup Guide
+
+**Option 1: Using Google Cloud Console (Recommended)**
+
+1. **Open Google Cloud Console**
+   - Go to [Google Cloud Console](https://console.cloud.google.com/)
+   - Select your project
+
+2. **Navigate to IAM & Admin**
+   - In the left sidebar, click "IAM & Admin" → "IAM"
+
+3. **Find Cloud Build Service Account**
+   - Look for the service account with email: `{PROJECT-NUMBER}@cloudbuild.gserviceaccount.com`
+   - If you don't see it, click "Include Google-provided role grants" checkbox
+
+4. **Add Required Roles**
+   - Click the pencil icon (Edit) next to the Cloud Build service account
+   - Click "ADD ANOTHER ROLE" and add these roles:
+     - `Logs Writer` (roles/logging.logWriter)
+     - `Source Repository Reader` (roles/source.reader)
+     - `Cloud Run Developer` (roles/run.developer) - if not already present
+   - Click "SAVE"
+
+**Option 2: Using gcloud CLI**
+
+```bash
+# Get your project number
+PROJECT_NUMBER=$(gcloud projects describe YOUR_PROJECT_ID --format="value(projectNumber)")
+
+# Grant Logs Writer role
+gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
+    --member="serviceAccount:${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com" \
+    --role="roles/logging.logWriter"
+
+# Grant Source Repository Reader role
+gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
+    --member="serviceAccount:${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com" \
+    --role="roles/source.reader"
+
+# Grant Cloud Run Developer role (if needed)
+gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
+    --member="serviceAccount:${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com" \
+    --role="roles/run.developer"
+```
+
+**Option 3: Using Terraform (Advanced)**
+
+If you prefer to manage IAM through Terraform, you can add this to your `terraform/main.tf`:
+
+```hcl
+# Get project information
+data "google_project" "project" {}
+
+# Grant necessary permissions to Cloud Build service account
+resource "google_project_iam_member" "cloudbuild_logs_writer" {
+  project = var.project_id
+  role    = "roles/logging.logWriter"
+  member  = "serviceAccount:${data.google_project.project.number}@cloudbuild.gserviceaccount.com"
+}
+
+resource "google_project_iam_member" "cloudbuild_source_reader" {
+  project = var.project_id
+  role    = "roles/source.reader"
+  member  = "serviceAccount:${data.google_project.project.number}@cloudbuild.gserviceaccount.com"
+}
+```
+
+#### Verification
+
+After setting up permissions, verify they're correctly applied:
+
+```bash
+# List IAM bindings for your project
+gcloud projects get-iam-policy YOUR_PROJECT_ID \
+    --flatten="bindings[].members" \
+    --format="table(bindings.role)" \
+    --filter="bindings.members:*@cloudbuild.gserviceaccount.com"
+```
+
+You should see the roles listed above in the output.
+
+### Security Considerations
+
+#### Permission Scope
+- **Project-Level**: These permissions apply to the entire GCP project
+- **Service Account**: Only affects the Cloud Build service account
+- **Cost**: IAM permissions are **completely free** - no charges apply
+
+#### What These Permissions Allow
+- `roles/logging.logWriter`: Write build logs to Cloud Logging
+- `roles/source.reader`: Read source code from Cloud Source Repositories
+- `roles/run.developer`: Manage Cloud Run services (Cloud Functions Gen 2 backend)
+
+#### What These Permissions DON'T Allow
+- Access to other GCP resources
+- Modification of IAM policies
+- Access to production data
+- Billing or project management
+
+#### Removing Permissions
+If you need to remove these permissions later:
+
+```bash
+# Remove Logs Writer role
+gcloud projects remove-iam-policy-binding YOUR_PROJECT_ID \
+    --member="serviceAccount:${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com" \
+    --role="roles/logging.logWriter"
+
+# Remove Source Repository Reader role
+gcloud projects remove-iam-policy-binding YOUR_PROJECT_ID \
+    --member="serviceAccount:${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com" \
+    --role="roles/source.reader"
+```
+
+**Note**: Removing these permissions will prevent future Cloud Functions deployments from working, but existing deployed functions will continue to operate normally.
+
+## ❓ Frequently Asked Questions (FAQ)
+
+### General Questions
+
+**Q: Do IAM permissions cost money?**
+A: No, IAM permissions are completely free. You only pay for actual GCP resources like Cloud Functions, storage, and compute time.
+
+**Q: Are these permissions specific to this Cloud Function?**
+A: No, these are project-level permissions that enable Cloud Build to work with any Cloud Function in your project.
+
+**Q: What happens if I don't set up these permissions?**
+A: Deployment will fail with a "missing permission on the build service account" error. Existing functions continue to work.
+
+**Q: Can I use a custom service account instead?**
+A: Yes, but it requires additional configuration. The default Cloud Build service account is recommended for simplicity.
+
+### Deployment Questions
+
+**Q: Why does deployment take so long?**
+A: First deployment takes longer because it:
+- Enables required APIs (Cloud Functions, Cloud Build, Cloud Run)
+- Creates storage buckets
+- Compiles and uploads your code
+- Provisions the Cloud Function infrastructure
+
+**Q: How do I check if my function deployed successfully?**
+A: Check the function URL in the deployment output, or visit the Cloud Functions section in Google Cloud Console.
+
+**Q: Can I deploy to multiple environments?**
+A: Yes, use `npm run deploy:dev` for development and `npm run deploy:prod` for production.
+
+### Development Questions
+
+**Q: How do I test CORS locally?**
+A: Start the dev server (`npm run dev`) and test from `http://localhost:3000` or `http://localhost:3001` in your browser.
+
+**Q: Why am I getting TypeScript errors?**
+A: Ensure you have `@types/node` installed and your `tsconfig.json` is properly configured. Run `npm run build` to check for errors.
+
+**Q: How do I add new API endpoints?**
+A: Create new route files in `src/routes/` following the existing pattern, then import them in `src/routes/index.ts`.
+
+### Troubleshooting Questions
+
+**Q: Deployment fails with "terraform not found"**
+A: Install Terraform: `brew install terraform` (macOS) or `choco install terraform` (Windows).
+
+**Q: Getting "authentication required" errors?**
+A: Run `gcloud auth login` and `gcloud config set project YOUR_PROJECT_ID`.
+
+**Q: Function returns 500 errors after deployment?**
+A: Check the function logs in Google Cloud Console → Cloud Functions → Your Function → Logs.
+
+**Q: CORS errors in production?**
+A: Verify your production domains are correctly listed in `.env.production` under `CORS_ORIGINS`.
+
+### Cost and Billing Questions
+
+**Q: How much does this cost to run?**
+A: Cloud Functions pricing depends on usage:
+- **Free tier**: 2 million invocations/month
+- **Compute time**: $0.0000025 per 100ms (1GB memory)
+- **Storage**: ~$0.02/month for source code storage
+- **Typical cost**: $0-5/month for development projects
+
+**Q: How do I minimize costs?**
+A: 
+- Set `min_instances = 0` in terraform.tfvars (default)
+- Use appropriate memory allocation (1GB is usually sufficient)
+- Monitor usage in Google Cloud Console
+
+**Q: What happens if I exceed the free tier?**
+A: You'll be charged according to Google Cloud Functions pricing. Set up billing alerts to monitor usage.
+##  Troubleshooting
 
 ### Common Issues
 

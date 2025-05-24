@@ -102,21 +102,20 @@ export class Logger {
         } else {
           output += '📋 Metadata:';
         }
-        output += '\n' + this.prettyPrintObject(meta, 1);
+        output += `\n${this.prettyPrintObject(meta, 1)}`;
       }
       
       return output;
-    } else {
-      // Compact format for production
-      const baseMessage = `[${new Date().toISOString()}] [${level.toUpperCase()}] ${message}`;
-      if (meta && Object.keys(meta).length > 0) {
-        return `${baseMessage} ${JSON.stringify(meta)}`;
-      }
-      return baseMessage;
     }
+    // Compact format for production
+    const baseMessage = `[${new Date().toISOString()}] [${level.toUpperCase()}] ${message}`;
+    if (meta && Object.keys(meta).length > 0) {
+      return `${baseMessage} ${JSON.stringify(meta)}`;
+    }
+    return baseMessage;
   }
 
-  private prettyPrintObject(obj: Record<string, unknown>, indent: number = 0): string {
+  private prettyPrintObject(obj: Record<string, unknown>, indent = 0): string {
     const spaces = '  '.repeat(indent);
     let result = '';
     

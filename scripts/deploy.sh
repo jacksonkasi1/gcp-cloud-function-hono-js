@@ -1,12 +1,14 @@
 #!/bin/bash
 
 # =============================================================================
-# GCP Hono.js Serverless Application Deployment Script
+# GCP TypeScript Hono.js Serverless Application Deployment Script
 # =============================================================================
 # This script handles the complete deployment process including:
+# - Environment-specific configuration (development/production)
+# - TypeScript compilation and build process
 # - Version management and tracking
 # - Terraform infrastructure deployment
-# - Automatic cleanup of old versions
+# - CORS configuration validation
 # - Comprehensive error handling and logging
 # =============================================================================
 
@@ -24,7 +26,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 TERRAFORM_DIR="$PROJECT_ROOT/terraform"
 VERSION_FILE="$PROJECT_ROOT/.deployment-version"
-LOG_FILE="$PROJECT_ROOT/deployment.log"
+
+# Environment-specific configuration
+DEPLOY_ENV=${NODE_ENV:-production}
+LOG_FILE="$PROJECT_ROOT/deployment-${DEPLOY_ENV}.log"
 
 # Default values
 DEFAULT_PROJECT_ID=""
@@ -167,6 +172,42 @@ check_terraform_vars() {
 # Deployment Functions
 # =============================================================================
 
+load_environment() {
+    log "INFO" "Loading environment configuration for: $DEPLOY_ENV"
+    
+    cd "$PROJECT_ROOT"
+    
+    # Load environment-specific configuration
+    export NODE_ENV="$DEPLOY_ENV"
+    source "$SCRIPT_DIR/load-env.sh"
+    
+    log "INFO" "Environment loaded successfully"
+    log "INFO" "NODE_ENV: $NODE_ENV"
+    log "INFO" "CORS Origins: $CORS_ORIGINS"
+    log "INFO" "Function Version: $FUNCTION_VERSION"
+    log "INFO" "Function Region: $FUNCTION_REGION"
+}
+
+check_typescript_setup() {
+    log "INFO" "Checking TypeScript setup..."
+    
+    cd "$PROJECT_ROOT"
+    
+    # Check if TypeScript source exists
+    if [ ! -f "src/index.ts" ]; then
+        log "ERROR" "TypeScript source file 'src/index.ts' not found"
+        exit 1
+    fi
+    
+    # Check if tsconfig.json exists
+    if [ ! -f "tsconfig.json" ]; then
+        log "ERROR" "tsconfig.json not found"
+        exit 1
+    fi
+    
+    log "INFO" "TypeScript setup validated"
+}
+
 install_dependencies() {
     log "INFO" "Installing Node.js dependencies..."
     
@@ -177,8 +218,46 @@ install_dependencies() {
         exit 1
     fi
     
-    npm install --production
+    # Install all dependencies (including dev dependencies for build)
+    npm install
     log "INFO" "Dependencies installed successfully"
+}
+
+build_typescript() {
+    log "INFO" "Building TypeScript application..."
+    
+    cd "$PROJECT_ROOT"
+    
+    # Clean previous build
+    if [ -d "dist" ]; then
+        rm -rf dist
+        log "INFO" "Cleaned previous build"
+    fi
+    
+    # Build TypeScript
+    npm run build
+    
+    # Verify build output
+    if [ ! -f "dist/index.js" ]; then
+        log "ERROR" "TypeScript build failed - dist/index.js not found"
+        exit 1
+    fi
+    
+    log "INFO" "TypeScript build completed successfully"
+}
+
+validate_cors_config() {
+    log "INFO" "Validating CORS configuration..."
+    
+    if [ "$DEPLOY_ENV" = "production" ] && [ -z "$CORS_ORIGINS" ]; then
+        log "WARN" "No CORS origins configured for production environment"
+        log "WARN" "This will block all cross-origin requests"
+        log "INFO" "Configure CORS_ORIGINS in .env.production if needed"
+    elif [ "$DEPLOY_ENV" = "development" ]; then
+        log "INFO" "Development CORS origins: $CORS_ORIGINS"
+    fi
+    
+    log "INFO" "CORS configuration validated"
 }
 
 deploy_infrastructure() {
@@ -257,16 +336,26 @@ test_deployment() {
 # =============================================================================
 
 main() {
-    log "INFO" "Starting deployment process..."
+    log "INFO" "Starting TypeScript deployment process..."
     log "INFO" "Project root: $PROJECT_ROOT"
     log "INFO" "Terraform directory: $TERRAFORM_DIR"
+    log "INFO" "Deployment environment: $DEPLOY_ENV"
+    log "INFO" "Log file: $LOG_FILE"
+    
+    # Load environment configuration
+    load_environment
     
     # Run pre-deployment checks
     check_prerequisites
+    check_typescript_setup
     check_terraform_vars
     
-    # Install dependencies
+    # Validate environment-specific configuration
+    validate_cors_config
+    
+    # Install dependencies and build
     install_dependencies
+    build_typescript
     
     # Deploy infrastructure
     deploy_infrastructure
@@ -274,7 +363,8 @@ main() {
     # Test the deployment
     test_deployment
     
-    log "INFO" "Deployment process completed successfully!"
+    log "INFO" "TypeScript deployment process completed successfully!"
+    log "INFO" "Environment: $DEPLOY_ENV"
     log "INFO" "Check the deployment log at: $LOG_FILE"
 }
 
@@ -291,7 +381,17 @@ while [[ $# -gt 0 ]]; do
             echo "Options:"
             echo "  -h, --help     Show this help message"
             echo ""
-            echo "This script deploys the Hono.js serverless application to GCP."
+            echo "Environment Variables:"
+            echo "  NODE_ENV       Set deployment environment (development|production)"
+            echo "                 Default: production"
+            echo ""
+            echo "Examples:"
+            echo "  $0                           # Deploy to production"
+            echo "  NODE_ENV=development $0      # Deploy to development"
+            echo "  npm run deploy:dev           # Deploy to development"
+            echo "  npm run deploy:prod          # Deploy to production"
+            echo ""
+            echo "This script deploys the TypeScript Hono.js serverless application to GCP."
             echo "Make sure to configure terraform/terraform.tfvars before running."
             exit 0
             ;;

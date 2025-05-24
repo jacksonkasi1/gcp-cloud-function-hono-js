@@ -1,156 +1,77 @@
-# GCP Hono.js Serverless Application
+# GCP TypeScript Hono.js Serverless Application
 
-A production-ready serverless Node.js application built with Hono.js framework, deployed to Google Cloud Platform (GCP) as a Cloud Function using Terraform for Infrastructure as Code.
+A production-ready serverless TypeScript application built with Hono.js framework, featuring CORS support, environment-specific configurations, modular architecture, and hot reload development. Deployed to Google Cloud Platform (GCP) as a Cloud Function using Terraform for Infrastructure as Code.
 
 ## 🚀 Features
 
-- **Hono.js Framework**: Fast, lightweight web framework for Node.js 20+
-- **Two API Routes**: Health check and User management endpoints
-- **GCP Cloud Functions**: Serverless deployment with 1GB memory allocation
-- **Terraform IaC**: Complete infrastructure management and version control
-- **Automatic Version Management**: Tracks deployments and prunes old versions
-- **Asia South Region**: Optimized for `asia-south1` deployment
-- **Production Ready**: Comprehensive error handling and security considerations
+- **TypeScript Support**: Full TypeScript implementation with hot reload development
+- **Modular Architecture**: Clean, scalable code organization with domain-separated routes
+- **CORS Configuration**: Environment-specific CORS setup for localhost:3000 and localhost:3001
+- **Environment Separation**: Distinct development and production configurations
+- **Enhanced Logging**: Structured logging with different levels and request tracking
+- **Type Safety**: Comprehensive TypeScript types for all API responses and requests
+- **Hot Reload**: Development server with automatic TypeScript compilation using tsx
+- **Code Quality**: Biome linting/formatting for .ts and .js files
+- **Security**: Environment-specific CORS validation and comprehensive error handling
 
 ## 📁 Project Structure
 
 ```
 gcp-hono-serverless/
 ├── src/
-│   └── index.js                 # Main Hono.js application with 2 API routes
+│   ├── config/
+│   │   └── environment.ts       # Environment configuration and validation
+│   ├── types/
+│   │   ├── common.ts           # Common type definitions
+│   │   ├── user.ts             # User-related types
+│   │   └── course.ts           # Course-related types
+│   ├── utils/
+│   │   ├── logs/
+│   │   │   └── logger.ts       # Enhanced logging utility
+│   │   └── formatters/
+│   │       └── index.ts        # Data formatting and validation utilities
+│   ├── routes/
+│   │   ├── index.ts            # Main routes configuration
+│   │   ├── user/
+│   │   │   ├── index.ts        # User routes setup
+│   │   │   ├── get-user.ts     # Get users functionality
+│   │   │   └── user-profile.ts # User profile management
+│   │   └── course/
+│   │       ├── index.ts        # Course routes setup
+│   │       ├── get-course.ts   # Get courses functionality
+│   │       └── create-course.ts # Course creation and updates
+│   └── index.ts                # Main application entry point
+├── dist/                       # Compiled TypeScript output (generated)
 ├── terraform/
-│   ├── main.tf                  # Main Terraform configuration
-│   ├── variables.tf             # Terraform variables definition
-│   ├── outputs.tf               # Terraform outputs
+│   ├── main.tf                 # Main Terraform configuration
+│   ├── variables.tf            # Terraform variables definition
+│   ├── outputs.tf              # Terraform outputs
 │   └── terraform.tfvars.example # Example configuration file
 ├── scripts/
-│   ├── deploy.sh               # Comprehensive deployment script
-│   └── destroy.sh              # Infrastructure destruction script
-├── package.json                # Node.js dependencies and scripts
-└── README.md                   # This file
-```
-## 📜 Scripts Overview
-
-The `scripts/` directory contains essential automation tools for managing your serverless application lifecycle. Each script serves a specific purpose in the development and deployment workflow:
-
-### 🚀 [`deploy.sh`](scripts/deploy.sh:1) - Comprehensive Deployment Script
-**Purpose**: Automates the complete deployment process to GCP Cloud Functions with version management.
-
-**What it does:**
-- **Prerequisites Check**: Validates Node.js 20+, Terraform, gcloud CLI installation and authentication
-- **Configuration Validation**: Ensures `terraform.tfvars` is properly configured with valid project ID
-- **Dependency Management**: Installs Node.js dependencies automatically
-- **Version Management**: Auto-increments version numbers and tracks deployments in `.deployment-version`
-- **Infrastructure Deployment**: Creates/updates GCP resources using Terraform
-- **Health Validation**: Tests deployed function endpoints to ensure they're working
-- **Cleanup**: Removes temporary files and prunes old deployment versions
-- **Comprehensive Logging**: Detailed logs saved to `deployment.log` for troubleshooting
-
-**Usage:**
-```bash
-npm run deploy
-# or
-bash scripts/deploy.sh
+│   ├── deploy.sh              # Environment-aware deployment script
+│   ├── destroy.sh             # Infrastructure destruction script
+│   ├── dev.sh                 # TypeScript development server
+│   ├── dev.bat                # Windows development server
+│   ├── load-env.sh            # Environment configuration loader
+│   └── validate.sh            # Project validation script
+├── .env.development           # Development environment variables
+├── .env.production            # Production environment variables
+├── tsconfig.json              # TypeScript configuration
+├── biome.json                 # Biome linting/formatting configuration
+├── package.json               # Node.js dependencies and scripts
+└── README.md                  # This file
 ```
 
-### 🗑️ [`destroy.sh`](scripts/destroy.sh:1) - Infrastructure Destruction Script
-**Purpose**: Safely removes all GCP infrastructure and cleans up resources to prevent ongoing costs.
-
-**What it does:**
-- **Safety Confirmation**: Prompts for confirmation before destroying resources (unless `--force` used)
-- **Storage Cleanup**: Empties Cloud Storage buckets before deletion
-- **Infrastructure Removal**: Uses Terraform to destroy all GCP resources
-- **State Management**: Optionally cleans up Terraform state files
-- **Version Cleanup**: Optionally removes version tracking files
-- **Log Cleanup**: Optionally removes deployment logs
-- **Cost Prevention**: Ensures no resources are left running to incur charges
-
-**Usage:**
-```bash
-npm run destroy
-# or
-bash scripts/destroy.sh
-
-# Advanced options:
-bash scripts/destroy.sh --force --clean-all  # Skip confirmation, clean everything
-```
-
-### ✅ [`validate.sh`](scripts/validate.sh:1) - Project Validation Script
-**Purpose**: Pre-deployment health check that validates your entire setup is ready for deployment.
-
-**What it validates:**
-- **Project Structure**: Ensures all required files exist in correct locations
-- **Node.js Environment**: Checks Node.js 20+ version and npm installation
-- **Dependencies**: Verifies Hono.js dependencies are installed and configured
-- **Terraform Configuration**: Tests syntax and validates variable configuration
-- **GCP Setup**: Confirms gcloud authentication and project access
-- **Source Code**: Validates Hono.js imports, required routes, and Cloud Function exports
-- **Scripts**: Checks deployment scripts are properly configured
-
-**Why use it:**
-- **Prevents Deployment Failures**: Catches issues before expensive deployment attempts
-- **Saves Time**: Identifies configuration problems early in the process
-- **Production Safety**: Ensures critical settings like memory allocation are correct
-
-**Usage:**
-```bash
-bash scripts/validate.sh
-```
-
-### 🔧 [`dev.sh`](scripts/dev.sh:1) - Local Development Server (Unix/Linux/macOS)
-**Purpose**: Starts the Hono.js application locally for development and testing.
-
-**What it does:**
-- **Environment Setup**: Configures development environment variables
-- **Dependency Check**: Ensures Node.js 20+ and dependencies are installed
-- **Auto-install**: Installs dependencies if `node_modules` is missing
-- **Development Server**: Starts server with hot-reload on port 8080
-- **Endpoint Information**: Displays available API endpoints for testing
-
-**Usage:**
-```bash
-npm run dev
-# or
-bash scripts/dev.sh
-```
-
-### 🔧 [`dev.bat`](scripts/dev.bat:1) - Local Development Server (Windows)
-**Purpose**: Windows batch file equivalent of `dev.sh` for Windows users.
-
-**What it does:**
-- Same functionality as `dev.sh` but optimized for Windows Command Prompt
-- **Windows Compatibility**: Uses Windows-specific commands and path handling
-- **Visual Feedback**: Provides clear console output with Windows-friendly formatting
-
-**Usage:**
-```cmd
-npm run dev
-REM or
-scripts\dev.bat
-```
-
-## 🔄 Script Workflow
-
-**Typical Development Workflow:**
-1. **Validate Setup**: `bash scripts/validate.sh` - Ensure everything is configured
-2. **Local Development**: `npm run dev` - Test changes locally
-3. **Deploy**: `npm run deploy` - Deploy to GCP when ready
-4. **Cleanup**: `npm run destroy` - Remove infrastructure when done
-
-**Production Deployment:**
-1. **Pre-deployment Check**: `bash scripts/validate.sh`
-2. **Deploy**: `bash scripts/deploy.sh`
-3. **Monitor**: Check deployment logs and function URLs
-
-##  Prerequisites
+## 📋 Prerequisites
 
 Before deploying this application, ensure you have:
 
 1. **Node.js 20+** installed
-2. **Google Cloud SDK (gcloud)** installed and configured
-3. **Terraform** installed (version 1.0+)
-4. **GCP Project** with billing enabled
-5. **Required GCP APIs** enabled (will be enabled automatically during deployment)
+2. **TypeScript** support (installed via npm dependencies)
+3. **Google Cloud SDK (gcloud)** installed and configured
+4. **Terraform** installed (version 1.0+)
+5. **GCP Project** with billing enabled
+6. **Required GCP APIs** enabled (will be enabled automatically during deployment)
 
 ### Install Prerequisites
 
@@ -179,11 +100,42 @@ choco install terraform
 ### 1. Clone and Install Dependencies
 
 ```bash
-# Install Node.js dependencies
+# Install Node.js dependencies (includes TypeScript and development tools)
 npm install
+# or
+pnpm install
 ```
 
-### 2. Configure GCP Authentication
+### 2. Configure Environment Variables
+
+The application uses environment-specific configuration files:
+
+#### Development Environment (Pre-configured)
+The `.env.development` file is already configured with:
+- CORS origins for localhost:3000 and localhost:3001
+- Debug logging level
+- Development-appropriate settings
+
+#### Production Environment (Requires Configuration)
+Edit `.env.production` for your production environment:
+
+```bash
+# Production Environment Configuration
+NODE_ENV=production
+PORT=8080
+LOG_LEVEL=info
+MAX_REQUEST_SIZE=5mb
+
+# Production CORS origins (add your domains)
+CORS_ORIGINS=https://yourdomain.com,https://www.yourdomain.com
+
+# Function metadata (will be overridden by GCP environment)
+FUNCTION_VERSION=1.0.0
+FUNCTION_REGION=asia-south1
+FUNCTION_MEMORY=1GB
+```
+
+### 3. Configure GCP Authentication
 
 ```bash
 # Authenticate with Google Cloud
@@ -193,7 +145,7 @@ gcloud auth login
 gcloud config set project YOUR_PROJECT_ID
 ```
 
-### 3. Configure Terraform Variables
+### 4. Configure Terraform Variables
 
 ```bash
 # Copy the example configuration
@@ -226,54 +178,134 @@ enable_version_cleanup = true             # Enable automatic cleanup
 environment = "prod"                      # Environment identifier
 ```
 
-## 🚀 Deployment
+## 🚀 Development
 
-### Quick Deployment
+### Development Scripts
 
 ```bash
-# Deploy the entire application
+# Start development server with hot reload (development environment)
+npm run dev
+
+# Start development server with production environment variables
+npm run dev:prod
+
+# Build TypeScript to JavaScript
+npm run build
+
+# Watch mode for TypeScript compilation
+npm run build:watch
+
+# Lint TypeScript and JavaScript files
+npm run lint
+
+# Format code with Biome
+npm run format:fix
+
+# Check and fix all code issues
+npm run check:fix
+```
+
+### Development Environment Features
+
+The development environment includes:
+
+- **Hot Reload**: Automatic restart on TypeScript file changes using tsx
+- **CORS Support**: Pre-configured for localhost:3000 and localhost:3001
+- **Debug Logging**: Detailed structured logging for development
+- **Environment Validation**: Automatic validation of environment variables
+- **TypeScript Compilation**: Real-time TypeScript compilation
+- **Request Logging**: Detailed HTTP request/response logging
+
+### Test Endpoints
+
+```bash
+# Health check with environment information
+curl http://localhost:8080/health
+
+# Users API with pagination
+curl http://localhost:8080/api/users?page=1&limit=5
+
+# Get specific user
+curl http://localhost:8080/api/users/1
+
+# Create user (POST request)
+curl -X POST http://localhost:8080/api/users \
+  -H "Content-Type: application/json" \
+  -d '{"name":"John Doe","email":"john@example.com"}'
+
+# Update user
+curl -X PUT http://localhost:8080/api/users/1 \
+  -H "Content-Type: application/json" \
+  -d '{"name":"John Updated","email":"john.updated@example.com"}'
+
+# Courses API with filtering
+curl http://localhost:8080/api/courses?level=beginner&page=1&limit=5
+
+# Create course
+curl -X POST http://localhost:8080/api/courses \
+  -H "Content-Type: application/json" \
+  -d '{"title":"New Course","description":"Course description","instructor":"Jane Doe","duration":40,"level":"intermediate"}'
+
+# Test CORS (from allowed origins)
+# Open browser console on http://localhost:3000 and run:
+# fetch('http://localhost:8080/health').then(r => r.json()).then(console.log)
+```
+
+## 🚀 Deployment
+
+### Environment-Specific Deployment
+
+```bash
+# Deploy to production (default)
+npm run deploy:prod
+
+# Deploy to development
+npm run deploy:dev
+
+# Or use the script directly with environment
+NODE_ENV=production bash scripts/deploy.sh
+NODE_ENV=development bash scripts/deploy.sh
+```
+
+### Quick Deployment (Production)
+
+```bash
+# Deploy the entire application to production
 npm run deploy
 
 # Or use the script directly
 bash scripts/deploy.sh
 ```
 
-### Manual Deployment Steps
-
-```bash
-# 1. Initialize Terraform
-npm run tf-init
-
-# 2. Plan the deployment
-npm run tf-plan
-
-# 3. Apply the infrastructure
-npm run tf-apply
-```
-
-### Deployment Process
+### TypeScript Deployment Process
 
 The deployment script performs the following steps:
 
-1. **Prerequisites Check**: Validates required tools and authentication
-2. **Configuration Validation**: Ensures Terraform variables are properly set
-3. **Dependency Installation**: Installs Node.js dependencies
-4. **Version Management**: Automatically increments version number
-5. **Infrastructure Deployment**: Creates/updates GCP resources using Terraform
-6. **Health Check**: Validates the deployed function is working
-7. **Cleanup**: Removes temporary files and old versions
+1. **Environment Loading**: Loads environment-specific configuration
+2. **Prerequisites Check**: Validates required tools and authentication
+3. **TypeScript Setup Check**: Validates TypeScript configuration and source files
+4. **Configuration Validation**: Ensures Terraform variables are properly set
+5. **CORS Validation**: Validates environment-specific CORS configuration
+6. **Dependency Installation**: Installs Node.js and TypeScript dependencies
+7. **TypeScript Build**: Compiles TypeScript to JavaScript in dist/ directory
+8. **Version Management**: Automatically increments version number
+9. **Infrastructure Deployment**: Creates/updates GCP resources using Terraform
+10. **Health Check**: Validates the deployed function is working
+11. **Cleanup**: Removes temporary files and old versions
 
 ## 🔗 API Endpoints
 
 After successful deployment, your application will expose the following endpoints:
 
-### 1. Root Endpoint
+### Core Endpoints
+
+#### Root Endpoint
 ```
 GET /
 ```
 Returns API information and available endpoints.
 
-### 2. Health Check
+#### Health Check
 ```
 GET /health
 ```
@@ -286,17 +318,20 @@ Returns application health status, version, and configuration details.
   "timestamp": "2024-01-15T10:30:00.000Z",
   "version": "v1.0.1",
   "region": "asia-south1",
-  "memory": "1GB"
+  "memory": "1GB",
+  "environment": "production",
+  "cors_origins": ["https://yourdomain.com"]
 }
 ```
 
-### 3. Users API
+### User Management API
+
+#### Get Users
 ```
 GET /api/users?page=1&limit=10
-POST /api/users
 ```
 
-**GET Example Response:**
+**Example Response:**
 ```json
 {
   "success": true,
@@ -311,14 +346,24 @@ POST /api/users
   "pagination": {
     "page": 1,
     "limit": 10,
-    "total": 3,
+    "total": 5,
     "totalPages": 1
   },
   "timestamp": "2024-01-15T10:30:00.000Z"
 }
 ```
 
-**POST Example Request:**
+#### Get User by ID
+```
+GET /api/users/:id
+```
+
+#### Create User
+```
+POST /api/users
+```
+
+**Request Body:**
 ```json
 {
   "name": "Jane Smith",
@@ -326,17 +371,180 @@ POST /api/users
 }
 ```
 
-## 🧪 Local Development
+#### Update User
+```
+PUT /api/users/:id
+```
+
+### Course Management API
+
+#### Get Courses
+```
+GET /api/courses?page=1&limit=10&level=beginner
+```
+
+#### Get Course by ID
+```
+GET /api/courses/:id
+```
+
+#### Create Course
+```
+POST /api/courses
+```
+
+**Request Body:**
+```json
+{
+  "title": "Introduction to TypeScript",
+  "description": "Learn TypeScript fundamentals",
+  "instructor": "John Smith",
+  "duration": 40,
+  "level": "beginner"
+}
+```
+
+#### Update Course
+```
+PUT /api/courses/:id
+```
+
+## 🛠️ Development Tools
+
+### TypeScript Configuration
+
+The project uses TypeScript with strict configuration for type safety:
+
+```json
+// tsconfig.json highlights
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "exactOptionalPropertyTypes": true
+  }
+}
+```
+
+### Biome Linting and Formatting
+
+Biome is configured to handle both TypeScript and JavaScript files:
 
 ```bash
-# Run the application locally
-npm run dev
+# Lint all files
+npm run lint
 
-# The server will start on http://localhost:8080
-# Test endpoints:
-# - http://localhost:8080/health
-# - http://localhost:8080/api/users
+# Fix linting issues
+npm run lint:fix
+
+# Format code
+npm run format:fix
+
+# Check and fix all issues
+npm run check:fix
 ```
+
+#### Biome Features
+- **TypeScript Support**: Full .ts and .js file support
+- **Import Organization**: Automatic import sorting and cleanup
+- **Code Formatting**: Consistent code style enforcement
+- **Error Detection**: Advanced linting rules for code quality
+- **Performance**: Fast linting and formatting
+
+### Enhanced Logging
+
+The application includes a sophisticated logging system:
+
+```typescript
+import { logger } from './utils/logs/logger.js'
+
+// Structured logging with metadata
+logger.info('User created', { userId: 123, email: 'user@example.com' })
+logger.error('Database error', error, { operation: 'user_create' })
+logger.request('GET', '/api/users', 200, 150) // HTTP request logging
+```
+
+## 🌐 CORS Configuration
+
+### Environment-Specific CORS Setup
+
+The application includes comprehensive CORS support with environment-specific origins:
+
+#### Development Environment
+```bash
+# Automatically configured in .env.development
+CORS_ORIGINS=http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000,http://127.0.0.1:3001
+```
+
+#### Production Environment
+```bash
+# Configure in .env.production
+CORS_ORIGINS=https://yourdomain.com,https://www.yourdomain.com,https://app.yourdomain.com
+```
+
+### CORS Features
+
+- **Origin Validation**: Strict origin checking based on environment
+- **Credentials Support**: Enabled for authenticated requests
+- **Method Control**: Supports GET, POST, PUT, DELETE, OPTIONS
+- **Header Management**: Configurable allowed and exposed headers
+- **Caching**: Environment-specific cache control (no cache in dev, 24h in prod)
+
+### Testing CORS
+
+```javascript
+// Test from allowed origin (e.g., http://localhost:3000)
+fetch('http://localhost:8080/api/users')
+  .then(response => response.json())
+  .then(data => console.log(data))
+  .catch(error => console.error('CORS Error:', error))
+```
+
+## 🔧 Environment Management
+
+### Environment Separation
+
+The application maintains strict separation between development and production:
+
+#### Development Configuration
+- **CORS**: Permissive for localhost origins (3000, 3001)
+- **Logging**: Debug level with detailed output
+- **Error Handling**: Detailed error messages for debugging
+- **Request Size**: Larger limits for development testing (10mb)
+- **Hot Reload**: Enabled with tsx
+
+#### Production Configuration
+- **CORS**: Restrictive, requires explicit origin configuration
+- **Logging**: Info level, production-appropriate
+- **Error Handling**: Generic error messages for security
+- **Request Size**: Conservative limits for security (5mb)
+- **Performance**: Optimized for production workloads
+
+### Environment Variables Validation
+
+The application includes comprehensive environment validation:
+
+```typescript
+// Automatic validation on startup
+- NODE_ENV: Must be 'development' or 'production'
+- PORT: Must be valid port number (1-65535)
+- CORS_ORIGINS: Validated format and accessibility
+- LOG_LEVEL: Must be valid log level
+- MAX_REQUEST_SIZE: Must be valid size format
+```
+
+## 🔒 Security Considerations
+
+- **Environment Separation**: Strict separation prevents dev settings in production
+- **CORS Validation**: Environment-specific origin validation with localhost:3000 and localhost:3001 support
+- **Input Validation**: Enhanced validation with TypeScript types and comprehensive error handling
+- **Error Handling**: Environment-appropriate error messages (detailed in dev, generic in prod)
+- **Request Limits**: Configurable request size limits based on environment
+- **Logging**: Secure logging that doesn't expose sensitive data
+- **Type Safety**: TypeScript ensures type safety across the entire application
 
 ## 📊 Version Management
 
@@ -383,91 +591,46 @@ bash scripts/destroy.sh --clean-all
 bash scripts/destroy.sh --clean-state
 ```
 
-## 🔧 Configuration Options
-
-### Memory and Performance
-
-The application is configured for 1GB memory allocation as required. You can modify this in `terraform/terraform.tfvars`:
-
-```hcl
-memory_mb = "1024"  # Options: 128, 256, 512, 1024, 2048, 4096, 8192
-```
-
-### Scaling Configuration
-
-```hcl
-max_instances = 100  # Maximum concurrent instances
-min_instances = 0    # Minimum instances (0 for cost optimization)
-timeout_seconds = 60 # Function timeout (1-540 seconds)
-```
-
-### Region Configuration
-
-```hcl
-region = "asia-south1"  # Target deployment region
-```
-
-## 📝 Logs and Monitoring
-
-### Deployment Logs
-
-```bash
-# View deployment logs
-cat deployment.log
-
-# View destruction logs
-cat destruction.log
-```
-
-### GCP Logs
-
-```bash
-# View function logs
-gcloud functions logs read hono-serverless-api --region=asia-south1
-
-# Follow live logs
-gcloud functions logs tail hono-serverless-api --region=asia-south1
-```
-
-## 🔒 Security Considerations
-
-- **IAM Configuration**: Function allows unauthenticated access (configurable)
-- **CORS**: Not configured by default (add if needed for web clients)
-- **Input Validation**: Basic validation implemented for user creation
-- **Error Handling**: Comprehensive error handling with proper HTTP status codes
-
 ## 🐛 Troubleshooting
 
 ### Common Issues
 
-1. **Authentication Error**
+1. **NODE_ENV Error**
+   ```bash
+   # Fixed with cross-env in package.json
+   npm run dev  # Now works correctly
+   ```
+
+2. **TypeScript Build Errors**
+   ```bash
+   # Check TypeScript configuration
+   npm run build
+   # Fix any type errors before deployment
+   ```
+
+3. **CORS Issues**
+   - Verify CORS_ORIGINS in environment files
+   - Check browser console for CORS errors
+   - Ensure origins match exactly (including protocol)
+
+4. **Authentication Error**
    ```bash
    gcloud auth login
    gcloud config set project YOUR_PROJECT_ID
    ```
 
-2. **Terraform State Issues**
+5. **Terraform State Issues**
    ```bash
    cd terraform
    terraform init -reconfigure
    ```
 
-3. **Function Not Responding**
-   - Check GCP Console for function logs
-   - Verify function is deployed in correct region
-   - Check IAM permissions
-
-4. **Version Conflicts**
-   ```bash
-   # Reset version tracking
-   rm .deployment-version
-   ```
-
 ### Getting Help
 
-- Check deployment logs: `cat deployment.log`
+- Check deployment logs: `cat deployment-production.log` or `cat deployment-development.log`
 - View GCP function logs in the Console
 - Verify Terraform state: `terraform show`
+- Check development server logs in terminal
 
 ## 📄 License
 
@@ -477,10 +640,11 @@ MIT License - see LICENSE file for details.
 
 1. Fork the repository
 2. Create a feature branch
-3. Make your changes
-4. Test thoroughly
-5. Submit a pull request
+3. Make your changes following the modular architecture
+4. Test thoroughly with both `npm run dev` and `npm run dev:prod`
+5. Run linting and formatting: `npm run check:fix`
+6. Submit a pull request
 
 ---
 
-**Note**: This application is production-ready but uses mock data for demonstration. In a real-world scenario, you would integrate with actual databases and external services.
+**Note**: This application features a clean, modular architecture with comprehensive TypeScript support, environment separation, and production-ready deployment processes. The codebase is organized by domain (users, courses) with shared utilities and types for maximum maintainability and scalability.

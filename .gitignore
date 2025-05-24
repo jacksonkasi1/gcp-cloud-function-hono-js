@@ -112,3 +112,6 @@ Thumbs.db
 *.temp
 
 package-lock.json
+
+terraform.tfvars.dev
+terraform.tfvars.prod

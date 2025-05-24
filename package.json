@@ -12,6 +12,13 @@
     "dev": "node --watch src/index.js",
     "build": "echo 'No build step required for this project'",
     "test": "echo 'Tests not implemented yet'",
+    "lint": "biome lint src/",
+    "lint:fix": "biome lint --write src/",
+    "format": "biome format src/",
+    "format:fix": "biome format --write src/",
+    "check": "biome check src/",
+    "check:fix": "biome check --write src/",
+    "validate": "bash scripts/validate.sh",
     "deploy": "bash scripts/deploy.sh",
     "destroy": "bash scripts/destroy.sh",
     "tf-init": "cd terraform && terraform init",
@@ -20,10 +27,11 @@
     "tf-destroy": "cd terraform && terraform destroy"
   },
   "dependencies": {
-    "hono": "^4.0.0",
-    "@hono/node-server": "^1.8.0"
+    "@hono/node-server": "^1.8.0",
+    "hono": "^4.0.0"
   },
   "devDependencies": {
+    "@biomejs/biome": "1.9.4",
     "@types/node": "^20.0.0"
   },
   "keywords": [

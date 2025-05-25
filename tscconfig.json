@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "baseUrl": "./dist",
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
+  "resolveFullPaths": true,
+  "replacers": {
+    "@/*": "./src/*"
+  }
+}

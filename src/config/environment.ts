@@ -18,6 +18,9 @@ const validateEnvironment = (): EnvironmentConfig => {
     throw new Error('NODE_ENV must be either "development" or "production"')
   }
 
+  /**
+   * @see https://hono.dev/docs/getting-started/google-cloud-run#_3-hello-world
+   */
   const port = Number.parseInt(process.env.PORT || '8080', 10)
   if (Number.isNaN(port) || port < 1 || port > 65535) {
     throw new Error('PORT must be a valid port number between 1 and 65535')

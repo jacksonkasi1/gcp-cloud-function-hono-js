@@ -113,5 +113,10 @@ Thumbs.db
 
 package-lock.json
 
-terraform.tfvars.dev
-terraform.tfvars.prod
+deploy-temp
+# GCP Credentials (SECURITY CRITICAL)
+deploy-credential.json
+credential.json
+*-credential.json
+service-account-key.json
+gcp-key.json

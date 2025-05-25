@@ -32,7 +32,6 @@ const loadEnvironmentConfig = () => {
 
     logger.info('Environment configuration loaded', {
       environment: env.NODE_ENV,
-      port: env.PORT,
       corsOrigins: env.CORS_ORIGINS.join(', ') || 'None configured',
       logLevel: env.LOG_LEVEL,
     })
@@ -138,27 +137,20 @@ app.notFound((c) => {
 // Initialize environment configuration
 loadEnvironmentConfig()
 
-// For Cloud Functions, we need to export the app.fetch function
+// For Cloud Functions/Cloud Run, export the app.fetch function
 export default app.fetch
 
-// For local development with hot reload
-if (isDevelopment) {
-  const port = env.PORT
-
-  serve(
-    {
-      fetch: app.fetch,
-      port: port,
-    },
-    (info) => {
-      logger.info('🚀 Development server running', {
-        url: `http://localhost:${info.port}`,
-        healthCheck: `http://localhost:${info.port}/health`,
-        usersApi: `http://localhost:${info.port}/api/users`,
-        coursesApi: `http://localhost:${info.port}/api/courses`,
-        corsOrigins: env.CORS_ORIGINS.join(', '),
-        logLevel: env.LOG_LEVEL,
-      })
-    }
-  )
+// For local development, start the server
+if (isDevelopment && !process.env.FUNCTION_TARGET && !process.env.K_SERVICE) {
+  serve({
+    fetch: app.fetch,
+    port: 8080
+  }, (info) => {
+    logger.info('🚀 Development server running', {
+      url: `http://localhost:${info.port}`,
+      healthCheck: `http://localhost:${info.port}/health`,
+      corsOrigins: env.CORS_ORIGINS.join(', '),
+      logLevel: env.LOG_LEVEL,
+    })
+  })
 }

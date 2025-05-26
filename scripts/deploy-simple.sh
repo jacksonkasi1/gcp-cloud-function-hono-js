@@ -1,9 +1,9 @@
 #!/bin/bash
 
 # =============================================================================
-# Simple Cloud Functions Deployment Script with Service Account
+# Simple Cloud Run Deployment Script with Service Account
 # =============================================================================
-# This script deploys the Hono.js serverless application to Google Cloud Functions
+# This script deploys the Hono.js application to Google Cloud Run
 # using service account credentials for authentication.
 # =============================================================================
 
@@ -52,11 +52,11 @@ if [[ ! -f "$CREDENTIAL_FILE" ]]; then
     exit 1
 fi
 
-# Set function name based on environment
+# Set service name based on environment
 if [[ "$ENVIRONMENT" == "production" ]]; then
-    FUNCTION_NAME="hono-serverless-api"
+    SERVICE_NAME="hono-serverless-api"
 else
-    FUNCTION_NAME="hono-serverless-api-dev"
+    SERVICE_NAME="hono-serverless-api-dev"
 fi
 
 # Check if environment file exists
@@ -69,21 +69,26 @@ fi
 
 print_status "Loading environment configuration from $ENV_FILE"
 
-# Load environment variables
+# Load environment variables (excluding PORT which is reserved by Cloud Run)
 set -a
 source "$ENV_FILE"
 set +a
 
+# Unset PORT to avoid conflicts with Cloud Run
+unset PORT
+
 # Set defaults if not specified
-REGION=${FUNCTION_REGION:-asia-south1}
-MEMORY=${FUNCTION_MEMORY:-1GB}
+REGION=${CLOUD_RUN_REGION:-asia-south1}
+MEMORY=${CLOUD_RUN_MEMORY:-1Gi}
+CPU=${CLOUD_RUN_CPU:-1}
 PROJECT_ID=${GCP_PROJECT_ID:-patient-lens-ai-new}
 
 print_status "Deployment Configuration:"
-echo "  Function Name: $FUNCTION_NAME"
+echo "  Service Name: $SERVICE_NAME"
 echo "  Environment: $ENVIRONMENT"
 echo "  Region: $REGION"
 echo "  Memory: $MEMORY"
+echo "  CPU: $CPU"
 echo "  Project: $PROJECT_ID"
 
 # Authenticate with service account
@@ -94,13 +99,11 @@ gcloud auth activate-service-account --key-file="$CREDENTIAL_FILE"
 print_status "Setting project: $PROJECT_ID"
 gcloud config set project "$PROJECT_ID"
 
-# Install dependencies
-print_status "Installing dependencies..."
-npm install
-
-# Build TypeScript
-print_status "Building TypeScript..."
-npm run build
+# Enable required APIs
+print_status "Enabling required APIs..."
+gcloud services enable cloudbuild.googleapis.com
+gcloud services enable run.googleapis.com
+gcloud services enable containerregistry.googleapis.com
 
 # Get the service account email from the credential file
 SERVICE_ACCOUNT_EMAIL=$(python3 -c "import json; print(json.load(open('$CREDENTIAL_FILE'))['client_email'])" 2>/dev/null || \
@@ -109,31 +112,77 @@ SERVICE_ACCOUNT_EMAIL=$(python3 -c "import json; print(json.load(open('$CREDENTI
 
 print_status "Using service account: $SERVICE_ACCOUNT_EMAIL"
 
-# Deploy the function
-print_status "Deploying Cloud Function: $FUNCTION_NAME"
+# Deploy to Cloud Run
+print_status "Deploying to Cloud Run: $SERVICE_NAME"
 
-gcloud functions deploy "$FUNCTION_NAME" \
-    --gen2 \
-    --runtime=nodejs20 \
-    --region="$REGION" \
+# Try Docker-based deployment first, fallback to source-based if it fails
+print_status "Attempting Docker-based deployment..."
+
+if gcloud run deploy "$SERVICE_NAME" \
     --source=. \
-    --entry-point=default \
-    --trigger-http \
+    --region="$REGION" \
     --allow-unauthenticated \
     --memory="$MEMORY" \
-    --timeout=60s \
+    --cpu="$CPU" \
+    --timeout=300 \
+    --concurrency=100 \
+    --min-instances=0 \
+    --max-instances=10 \
     --service-account="$SERVICE_ACCOUNT_EMAIL" \
-    --set-env-vars="NODE_ENV=$ENVIRONMENT" \
-    --quiet
+    --set-env-vars="NODE_ENV=$ENVIRONMENT,PORT=8080" \
+    --port=8080 \
+    --quiet; then
+    print_success "Docker-based deployment successful!"
+else
+    print_warning "Docker-based deployment failed. Trying source-based deployment..."
+    
+    # Remove Dockerfile temporarily for source-based deployment
+    if [[ -f "Dockerfile" ]]; then
+        mv Dockerfile Dockerfile.bak
+        print_status "Temporarily moved Dockerfile to Dockerfile.bak"
+    fi
+    
+    # Try source-based deployment
+    if gcloud run deploy "$SERVICE_NAME" \
+        --source=. \
+        --region="$REGION" \
+        --allow-unauthenticated \
+        --memory="$MEMORY" \
+        --cpu="$CPU" \
+        --timeout=300 \
+        --concurrency=100 \
+        --min-instances=0 \
+        --max-instances=10 \
+        --service-account="$SERVICE_ACCOUNT_EMAIL" \
+        --set-env-vars="NODE_ENV=$ENVIRONMENT" \
+        --port=8080 \
+        --quiet; then
+        print_success "Source-based deployment successful!"
+        
+        # Restore Dockerfile
+        if [[ -f "Dockerfile.bak" ]]; then
+            mv Dockerfile.bak Dockerfile
+            print_status "Restored Dockerfile"
+        fi
+    else
+        # Restore Dockerfile even if deployment failed
+        if [[ -f "Dockerfile.bak" ]]; then
+            mv Dockerfile.bak Dockerfile
+            print_status "Restored Dockerfile"
+        fi
+        print_error "Both Docker-based and source-based deployments failed!"
+        exit 1
+    fi
+fi
 
 if [[ $? -eq 0 ]]; then
-    print_success "Function deployed successfully!"
+    print_success "Service deployed successfully!"
     
-    # Get function URL
-    FUNCTION_URL=$(gcloud functions describe "$FUNCTION_NAME" --region="$REGION" --format="value(serviceConfig.uri)")
+    # Get service URL
+    SERVICE_URL=$(gcloud run services describe "$SERVICE_NAME" --region="$REGION" --format="value(status.url)")
     
-    print_success "Function URL: $FUNCTION_URL"
-    print_status "You can test the API with: curl $FUNCTION_URL/health"
+    print_success "Service URL: $SERVICE_URL"
+    print_status "You can test the API with: curl $SERVICE_URL/health"
 else
     print_error "Deployment failed!"
     exit 1

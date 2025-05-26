@@ -1,7 +1,7 @@
 {
-  "name": "gcp-hono-serverless",
+  "name": "gcp-hono-cloudrun",
   "version": "1.0.0",
-  "description": "TypeScript-based serverless application using Hono.js framework for GCP Cloud Functions with CORS support",
+  "description": "TypeScript-based application using Hono.js framework for GCP Cloud Run with CORS support",
   "main": "dist/index.js",
   "engines": {
     "node": ">=20.0.0"
@@ -28,7 +28,6 @@
     "test:api:prod": "bash scripts/test-api.sh production"
   },
   "dependencies": {
-    "@google-cloud/functions-framework": "^4.0.0",
     "@hono/node-server": "^1.8.0",
     "@hono/zod-validator": "^0.5.0",
     "dotenv": "^16.4.5",
@@ -44,9 +43,9 @@
     "typescript": "^5.3.3"
   },
   "keywords": [
-    "serverless",
+    "cloud-run",
     "gcp",
-    "cloud-functions",
+    "containerized",
     "cloud-build",
     "hono",
     "nodejs",

@@ -1,6 +1,6 @@
-# GCP TypeScript Hono.js Serverless Application
+# GCP TypeScript Hono.js Cloud Run Application
 
-A production-ready serverless TypeScript application built with Hono.js framework, featuring CORS support, environment-specific configurations, modular architecture, and hot reload development. Deployed to Google Cloud Platform (GCP) as a Cloud Function using Google Cloud Build for automated CI/CD.
+A production-ready containerized TypeScript application built with Hono.js framework, featuring CORS support, environment-specific configurations, modular architecture, and hot reload development. Deployed to Google Cloud Platform (GCP) as a Cloud Run service using Docker containers for scalable and efficient deployment.
 
 ## 🚀 Features
 
@@ -13,13 +13,14 @@ A production-ready serverless TypeScript application built with Hono.js framewor
 - **Hot Reload**: Development server with automatic TypeScript compilation using tsx
 - **Code Quality**: Biome linting/formatting for .ts and .js files
 - **Security**: Environment-specific CORS validation and comprehensive error handling
-- **Cloud Build CI/CD**: Branch-based deployment automation with Google Cloud Build
+- **Cloud Run Deployment**: Containerized deployment with automatic scaling and traffic management
+- **Docker Support**: Multi-stage Docker builds with optimized container images
 - **Health Check API**: Built-in health monitoring and status endpoints
 
 ## 📁 Project Structure
 
 ```
-gcp-hono-serverless/
+gcp-hono-cloudrun/
 ├── src/
 │   ├── config/
 │   │   └── environment.ts       # Environment configuration and validation
@@ -52,12 +53,14 @@ gcp-hono-serverless/
 │   └── index.ts                # Main application entry point
 ├── dist/                       # Compiled TypeScript output (generated)
 ├── scripts/
-│   ├── deploy-local.sh         # Local deployment script
+│   ├── deploy-simple.sh        # Cloud Run deployment script
 │   ├── test-api.sh             # API testing script
 │   ├── validate.sh             # Project validation script
 │   ├── dev.sh                  # Linux/Mac development server
 │   └── dev.bat                 # Windows development server
-├── cloudbuild.yaml             # Google Cloud Build configuration
+├── Dockerfile                  # Docker container configuration
+├── .dockerignore               # Docker build exclusions
+├── cloudbuild-cloudrun.yaml    # Google Cloud Build configuration for Cloud Run
 ├── .env.development            # Development environment variables
 ├── .env.production             # Production environment variables
 ├── tsconfig.json               # TypeScript configuration
@@ -129,10 +132,11 @@ MAX_REQUEST_SIZE=5mb
 # Production CORS origins (add your domains)
 CORS_ORIGINS=https://yourdomain.com,https://www.yourdomain.com
 
-# Function metadata (will be overridden by GCP environment)
-FUNCTION_VERSION=1.0.0
-FUNCTION_REGION=asia-south1
-FUNCTION_MEMORY=1GB
+# Cloud Run metadata (will be overridden by GCP environment)
+CLOUD_RUN_VERSION=1.0.0
+CLOUD_RUN_REGION=asia-south1
+CLOUD_RUN_MEMORY=1Gi
+CLOUD_RUN_CPU=1
 ```
 
 ### 3. Configure GCP Authentication
@@ -151,12 +155,12 @@ gcloud config set project YOUR_PROJECT_ID
 
 ```bash
 # Enable required APIs
-gcloud services enable cloudfunctions.googleapis.com
 gcloud services enable cloudbuild.googleapis.com
 gcloud services enable run.googleapis.com
+gcloud services enable containerregistry.googleapis.com
 
 # Verify APIs are enabled
-gcloud services list --enabled --filter="name:(cloudfunctions.googleapis.com OR cloudbuild.googleapis.com OR run.googleapis.com)"
+gcloud services list --enabled --filter="name:(cloudbuild.googleapis.com OR run.googleapis.com OR containerregistry.googleapis.com)"
 ```
 
 ## 🚀 Development
@@ -239,7 +243,7 @@ curl -X POST http://localhost:8080/api/courses \
 
 ### Local Deployment
 
-Use the local deployment scripts for manual deployment:
+Use the deployment script for manual Cloud Run deployment:
 
 ```bash
 # Deploy to development environment
@@ -249,82 +253,37 @@ npm run deploy:dev
 npm run deploy:prod
 
 # Or use the script directly
-bash scripts/deploy-local.sh development
-bash scripts/deploy-local.sh production
+bash scripts/deploy-simple.sh development
+bash scripts/deploy-simple.sh production
 ```
 
-### Cloud Build Deployment (Automated CI/CD)
+### Docker Deployment (Optional)
 
-The application uses Google Cloud Build for automated deployment based on Git branches:
+If you want to test locally with Docker:
 
-#### Branch-Based Deployment Strategy
-
-1. **Development Environment**: Push to `dev` branch
-   - Deploys to `hono-serverless-api-dev` function
-   - Uses `.env.development` configuration
-   - Fallback to GitHub Secrets with `_DEV_*` prefix
-
-2. **Production Environment**: Push to `production` branch
-   - Deploys to `hono-serverless-api` function
-   - Uses `.env.production` configuration
-   - Fallback to GitHub Secrets with `_PROD_*` prefix
-
-#### Setting up Cloud Build Triggers
-
-1. **Connect Repository to Cloud Build**:
-   ```bash
-   # Enable Cloud Build API (if not already done)
-   gcloud services enable cloudbuild.googleapis.com
-   
-   # Connect your repository (GitHub/GitLab/Bitbucket)
-   # This is done through the Cloud Console UI
-   ```
-
-2. **Create Build Triggers**:
-   
-   **Development Trigger**:
-   - Name: `deploy-development`
-   - Event: Push to branch
-   - Branch: `^dev$`
-   - Configuration: Cloud Build configuration file
-   - Cloud Build configuration file location: `cloudbuild.yaml`
-
-   **Production Trigger**:
-   - Name: `deploy-production`
-   - Event: Push to branch
-   - Branch: `^production$`
-   - Configuration: Cloud Build configuration file
-   - Cloud Build configuration file location: `cloudbuild.yaml`
-
-3. **Configure GitHub Secrets (Optional Fallback)**:
-   
-   If environment files are not present, the system falls back to these substitution variables:
-   
-   ```yaml
-   # Development secrets
-   _DEV_CORS_ORIGINS: 'http://localhost:3000,http://localhost:3001'
-   _DEV_FUNCTION_VERSION: 'dev-${SHORT_SHA}'
-   _DEV_FUNCTION_REGION: 'asia-south1'
-   _DEV_FUNCTION_MEMORY: '1GB'
-   
-   # Production secrets
-   _PROD_CORS_ORIGINS: 'https://yourdomain.com'
-   _PROD_FUNCTION_VERSION: 'prod-${SHORT_SHA}'
-   _PROD_FUNCTION_REGION: 'asia-south1'
-   _PROD_FUNCTION_MEMORY: '1GB'
-   ```
+```bash
+# Build and run locally
+docker build -t hono-cloudrun-app .
+docker run -p 8080:8080 --env-file .env.development hono-cloudrun-app
+curl http://localhost:8080/health
+```
 
 ### Deployment Process
 
-The Cloud Build deployment performs the following steps:
+The deployment script automatically:
 
-1. **Environment Detection**: Determines target environment based on branch name
-2. **Configuration Loading**: Loads environment-specific configuration with fallback to secrets
-3. **Dependency Installation**: Installs Node.js dependencies
-4. **TypeScript Build**: Compiles TypeScript to JavaScript
-5. **Package Preparation**: Creates deployment package with necessary files
-6. **Function Deployment**: Deploys to Google Cloud Functions (Gen 2)
-7. **Health Check**: Validates the deployed function is working correctly
+1. **Tries Docker-based deployment first** (using the Dockerfile)
+2. **Falls back to source-based deployment** if Docker fails (no Docker knowledge required)
+3. **Configures Cloud Run** with automatic scaling (0-10 instances)
+4. **Sets up proper environment variables** and service account
+5. **Validates deployment** and provides the service URL
+
+#### Cloud Run Benefits
+
+- **Automatic Scaling**: Scales from 0 to 10 instances based on traffic
+- **Pay-per-use**: Only pay for actual request processing time
+- **No Docker knowledge required**: Source-based deployment handles containerization
+- **Better performance**: Higher concurrency than Cloud Functions
 
 ## 🔗 API Endpoints
 

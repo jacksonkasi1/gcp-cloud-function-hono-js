@@ -45,6 +45,14 @@ const loadEnvironmentConfig = () => {
 app.use('*', honoLogger())
 app.use('*', prettyJSON())
 
+// Debug middleware - add this before CORS
+app.use('*', async (c, next) => {
+  console.log('Request headers type:', typeof c.req.raw.headers)
+  console.log('Request headers methods:', Object.getOwnPropertyNames(c.req.raw.headers))
+  console.log('Has get method:', typeof c.req.raw.headers.get)
+  await next()
+})
+
 // CORS configuration with environment-specific origins
 app.use(
   '*',
@@ -137,20 +145,21 @@ app.notFound((c) => {
 // Initialize environment configuration
 loadEnvironmentConfig()
 
-// For Cloud Functions/Cloud Run, export the app.fetch function
-export default app.fetch
+// Start the server (for Cloud Run and local development)
+const port = Number(process.env.PORT) || 8080
 
-// For local development, start the server
-if (isDevelopment && !process.env.FUNCTION_TARGET && !process.env.K_SERVICE) {
-  serve({
-    fetch: app.fetch,
-    port: 8080
-  }, (info) => {
-    logger.info('🚀 Development server running', {
-      url: `http://localhost:${info.port}`,
-      healthCheck: `http://localhost:${info.port}/health`,
-      corsOrigins: env.CORS_ORIGINS.join(', '),
-      logLevel: env.LOG_LEVEL,
-    })
+serve({
+  fetch: app.fetch,
+  port: port
+}, (info) => {
+  logger.info('🚀 Server running', {
+    url: `http://localhost:${info.port}`,
+    healthCheck: `http://localhost:${info.port}/health`,
+    corsOrigins: env.CORS_ORIGINS.join(', '),
+    logLevel: env.LOG_LEVEL,
+    environment: env.NODE_ENV,
   })
-}
+})
+
+// Export the app for testing purposes
+export default app

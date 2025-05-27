@@ -1,0 +1,4 @@
+enable:
+    - app engine admin api
+    - cloud build api
+    - cloud storage api

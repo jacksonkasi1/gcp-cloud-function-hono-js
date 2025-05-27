@@ -1,6 +1,6 @@
-# GCP TypeScript Hono.js Serverless Application
+# GCP TypeScript Hono.js Cloud Run Application
 
-A production-ready serverless TypeScript application built with Hono.js framework, featuring CORS support, environment-specific configurations, modular architecture, and hot reload development. Deployed to Google Cloud Platform (GCP) as a Cloud Function using Terraform for Infrastructure as Code.
+A production-ready containerized TypeScript application built with Hono.js framework, featuring CORS support, environment-specific configurations, modular architecture, and hot reload development. Deployed to Google Cloud Platform (GCP) as a Cloud Run service using Docker containers for scalable and efficient deployment.
 
 ## 🚀 Features
 
@@ -13,11 +13,14 @@ A production-ready serverless TypeScript application built with Hono.js framewor
 - **Hot Reload**: Development server with automatic TypeScript compilation using tsx
 - **Code Quality**: Biome linting/formatting for .ts and .js files
 - **Security**: Environment-specific CORS validation and comprehensive error handling
+- **Cloud Run Deployment**: Containerized deployment with automatic scaling and traffic management
+- **Docker Support**: Multi-stage Docker builds with optimized container images
+- **Health Check API**: Built-in health monitoring and status endpoints
 
 ## 📁 Project Structure
 
 ```
-gcp-hono-serverless/
+gcp-hono-cloudrun/
 ├── src/
 │   ├── config/
 │   │   └── environment.ts       # Environment configuration and validation
@@ -31,35 +34,39 @@ gcp-hono-serverless/
 │   │   └── formatters/
 │   │       └── index.ts        # Data formatting and validation utilities
 │   ├── routes/
-│   │   ├── index.ts            # Main routes configuration
+│   │   ├── index.ts            # Main routes configuration with health check
 │   │   ├── user/
 │   │   │   ├── index.ts        # User routes setup
-│   │   │   ├── get-user.ts     # Get users functionality
-│   │   │   └── user-profile.ts # User profile management
+│   │   │   ├── get.ts          # Get users functionality
+│   │   │   ├── get-by-id.ts    # Get user by ID
+│   │   │   ├── create.ts       # User creation
+│   │   │   └── update.ts       # User updates
 │   │   └── course/
 │   │       ├── index.ts        # Course routes setup
-│   │       ├── get-course.ts   # Get courses functionality
-│   │       └── create-course.ts # Course creation and updates
+│   │       ├── get.ts          # Get courses functionality
+│   │       ├── get-by-id.ts    # Get course by ID
+│   │       ├── create.ts       # Course creation
+│   │       └── update.ts       # Course updates
+│   ├── schema/
+│   │   ├── user/               # User validation schemas
+│   │   └── course/             # Course validation schemas
 │   └── index.ts                # Main application entry point
 ├── dist/                       # Compiled TypeScript output (generated)
-├── terraform/
-│   ├── main.tf                 # Main Terraform configuration
-│   ├── variables.tf            # Terraform variables definition
-│   ├── outputs.tf              # Terraform outputs
-│   └── terraform.tfvars.example # Example configuration file
 ├── scripts/
-│   ├── deploy.sh              # Environment-aware deployment script
-│   ├── destroy.sh             # Infrastructure destruction script
-│   ├── dev.sh                 # TypeScript development server
-│   ├── dev.bat                # Windows development server
-│   ├── load-env.sh            # Environment configuration loader
-│   └── validate.sh            # Project validation script
-├── .env.development           # Development environment variables
-├── .env.production            # Production environment variables
-├── tsconfig.json              # TypeScript configuration
-├── biome.json                 # Biome linting/formatting configuration
-├── package.json               # Node.js dependencies and scripts
-└── README.md                  # This file
+│   ├── deploy-simple.sh        # Cloud Run deployment script
+│   ├── test-api.sh             # API testing script
+│   ├── validate.sh             # Project validation script
+│   ├── dev.sh                  # Linux/Mac development server
+│   └── dev.bat                 # Windows development server
+├── Dockerfile                  # Docker container configuration
+├── .dockerignore               # Docker build exclusions
+├── cloudbuild-cloudrun.yaml    # Google Cloud Build configuration for Cloud Run
+├── .env.development            # Development environment variables
+├── .env.production             # Production environment variables
+├── tsconfig.json               # TypeScript configuration
+├── biome.json                  # Biome linting/formatting configuration
+├── package.json                # Node.js dependencies and scripts
+└── README.md                   # This file
 ```
 
 ## 📋 Prerequisites
@@ -69,9 +76,8 @@ Before deploying this application, ensure you have:
 1. **Node.js 20+** installed
 2. **TypeScript** support (installed via npm dependencies)
 3. **Google Cloud SDK (gcloud)** installed and configured
-4. **Terraform** installed (version 1.0+)
-5. **GCP Project** with billing enabled
-6. **Required GCP APIs** enabled (will be enabled automatically during deployment)
+4. **GCP Project** with billing enabled
+5. **Required GCP APIs** enabled (see manual setup section below)
 
 ### Install Prerequisites
 
@@ -87,12 +93,9 @@ brew install --cask google-cloud-sdk
 # Windows (using Chocolatey)
 choco install gcloudsdk
 
-# Install Terraform
-# macOS (using Homebrew)
-brew install terraform
-
-# Windows (using Chocolatey)
-choco install terraform
+# Linux (using package manager)
+curl https://sdk.cloud.google.com | bash
+exec -l $SHELL
 ```
 
 ## 🔧 Setup
@@ -129,10 +132,11 @@ MAX_REQUEST_SIZE=5mb
 # Production CORS origins (add your domains)
 CORS_ORIGINS=https://yourdomain.com,https://www.yourdomain.com
 
-# Function metadata (will be overridden by GCP environment)
-FUNCTION_VERSION=1.0.0
-FUNCTION_REGION=asia-south1
-FUNCTION_MEMORY=1GB
+# Cloud Run metadata (will be overridden by GCP environment)
+CLOUD_RUN_VERSION=1.0.0
+CLOUD_RUN_REGION=asia-south1
+CLOUD_RUN_MEMORY=1Gi
+CLOUD_RUN_CPU=1
 ```
 
 ### 3. Configure GCP Authentication
@@ -141,41 +145,22 @@ FUNCTION_MEMORY=1GB
 # Authenticate with Google Cloud
 gcloud auth login
 
-# Set your default project (optional)
+# Set your default project
 gcloud config set project YOUR_PROJECT_ID
 ```
 
-### 4. Configure Terraform Variables
+### 4. Enable Required GCP APIs (Manual Setup)
+
+**IMPORTANT**: The following APIs must be enabled manually before deployment:
 
 ```bash
-# Copy the example configuration
-cp terraform/terraform.tfvars.example terraform/terraform.tfvars
+# Enable required APIs
+gcloud services enable cloudbuild.googleapis.com
+gcloud services enable run.googleapis.com
+gcloud services enable containerregistry.googleapis.com
 
-# Edit the configuration with your project details
-nano terraform/terraform.tfvars
-```
-
-**Required Configuration in `terraform/terraform.tfvars`:**
-
-```hcl
-# GCP Project Configuration
-project_id = "your-actual-gcp-project-id"  # REQUIRED: Replace with your GCP project ID
-region     = "asia-south1"                 # Target region (default)
-
-# Function Configuration
-function_name    = "hono-serverless-api"   # Name of your Cloud Function
-memory_mb        = "1024"                  # Memory allocation (1GB as required)
-timeout_seconds  = 60                     # Function timeout
-max_instances    = 100                     # Maximum concurrent instances
-min_instances    = 0                      # Minimum instances (0 for cost optimization)
-
-# Version Management
-deployment_version    = "v1.0.0"          # Initial version
-max_versions_to_keep = 5                  # Number of versions to retain
-enable_version_cleanup = true             # Enable automatic cleanup
-
-# Environment
-environment = "prod"                      # Environment identifier
+# Verify APIs are enabled
+gcloud services list --enabled --filter="name:(cloudbuild.googleapis.com OR run.googleapis.com OR containerregistry.googleapis.com)"
 ```
 
 ## 🚀 Development
@@ -203,6 +188,9 @@ npm run format:fix
 
 # Check and fix all code issues
 npm run check:fix
+
+# Validate project configuration
+npm run validate
 ```
 
 ### Development Environment Features
@@ -253,45 +241,49 @@ curl -X POST http://localhost:8080/api/courses \
 
 ## 🚀 Deployment
 
-### Environment-Specific Deployment
+### Local Deployment
+
+Use the deployment script for manual Cloud Run deployment:
 
 ```bash
-# Deploy to production (default)
-npm run deploy:prod
-
-# Deploy to development
+# Deploy to development environment
 npm run deploy:dev
 
-# Or use the script directly with environment
-NODE_ENV=production bash scripts/deploy.sh
-NODE_ENV=development bash scripts/deploy.sh
-```
-
-### Quick Deployment (Production)
-
-```bash
-# Deploy the entire application to production
-npm run deploy
+# Deploy to production environment
+npm run deploy:prod
 
 # Or use the script directly
-bash scripts/deploy.sh
+bash scripts/deploy-simple.sh development
+bash scripts/deploy-simple.sh production
 ```
 
-### TypeScript Deployment Process
+### Docker Deployment (Optional)
 
-The deployment script performs the following steps:
+If you want to test locally with Docker:
 
-1. **Environment Loading**: Loads environment-specific configuration
-2. **Prerequisites Check**: Validates required tools and authentication
-3. **TypeScript Setup Check**: Validates TypeScript configuration and source files
-4. **Configuration Validation**: Ensures Terraform variables are properly set
-5. **CORS Validation**: Validates environment-specific CORS configuration
-6. **Dependency Installation**: Installs Node.js and TypeScript dependencies
-7. **TypeScript Build**: Compiles TypeScript to JavaScript in dist/ directory
-8. **Version Management**: Automatically increments version number
-9. **Infrastructure Deployment**: Creates/updates GCP resources using Terraform
-10. **Health Check**: Validates the deployed function is working
-11. **Cleanup**: Removes temporary files and old versions
+```bash
+# Build and run locally
+docker build -t hono-cloudrun-app .
+docker run -p 8080:8080 --env-file .env.development hono-cloudrun-app
+curl http://localhost:8080/health
+```
+
+### Deployment Process
+
+The deployment script automatically:
+
+1. **Tries Docker-based deployment first** (using the Dockerfile)
+2. **Falls back to source-based deployment** if Docker fails (no Docker knowledge required)
+3. **Configures Cloud Run** with automatic scaling (0-10 instances)
+4. **Sets up proper environment variables** and service account
+5. **Validates deployment** and provides the service URL
+
+#### Cloud Run Benefits
+
+- **Automatic Scaling**: Scales from 0 to 10 instances based on traffic
+- **Pay-per-use**: Only pay for actual request processing time
+- **No Docker knowledge required**: Source-based deployment handles containerization
+- **Better performance**: Higher concurrency than Cloud Functions
 
 ## 🔗 API Endpoints
 
@@ -314,13 +306,16 @@ Returns application health status, version, and configuration details.
 **Example Response:**
 ```json
 {
-  "status": "healthy",
-  "timestamp": "2024-01-15T10:30:00.000Z",
-  "version": "v1.0.1",
-  "region": "asia-south1",
-  "memory": "1GB",
-  "environment": "production",
-  "cors_origins": ["https://yourdomain.com"]
+  "success": true,
+  "data": {
+    "status": "healthy",
+    "version": "v1.0.1",
+    "region": "asia-south1",
+    "memory": "1GB",
+    "environment": "production",
+    "cors_origins": ["https://yourdomain.com"]
+  },
+  "timestamp": "2024-01-15T10:30:00.000Z"
 }
 ```
 
@@ -408,6 +403,51 @@ POST /api/courses
 ```
 PUT /api/courses/:id
 ```
+
+## 🧪 Testing
+
+### API Testing
+
+Use the built-in API testing script to validate your deployment:
+
+```bash
+# Test development environment
+npm run test:api:dev
+
+# Test production environment
+npm run test:api:prod
+
+# Or use the script directly
+bash scripts/test-api.sh development
+bash scripts/test-api.sh production
+```
+
+The test script performs comprehensive API testing including:
+- Health check validation
+- CRUD operations for users and courses
+- Error handling verification
+- Response format validation
+
+### Project Validation
+
+Validate your project configuration before deployment:
+
+```bash
+# Run complete project validation
+npm run validate
+
+# Or use the script directly
+bash scripts/validate.sh
+```
+
+The validation script checks:
+- Project structure and required files
+- Node.js and dependency setup
+- Google Cloud Build configuration
+- GCP authentication and API enablement
+- Environment configuration
+- Source code structure
+- TypeScript compilation
 
 ## 🛠️ Development Tools
 
@@ -503,350 +543,106 @@ fetch('http://localhost:8080/api/users')
   .catch(error => console.error('CORS Error:', error))
 ```
 
-## 🔧 Environment Management
+## 🔧 Configuration Management
 
-### Environment Separation
+### Environment Configuration Priority
 
-The application maintains strict separation between development and production:
+The deployment system uses the following priority order for configuration:
 
-#### Development Configuration
-- **CORS**: Permissive for localhost origins (3000, 3001)
-- **Logging**: Debug level with detailed output
-- **Error Handling**: Detailed error messages for debugging
-- **Request Size**: Larger limits for development testing (10mb)
-- **Hot Reload**: Enabled with tsx
+1. **Local Environment Files** (`.env.development`, `.env.production`)
+2. **GitHub Secrets/Cloud Build Substitutions** (fallback)
+3. **Default Values** (final fallback)
 
-#### Production Configuration
-- **CORS**: Restrictive, requires explicit origin configuration
-- **Logging**: Info level, production-appropriate
-- **Error Handling**: Generic error messages for security
-- **Request Size**: Conservative limits for security (5mb)
-- **Performance**: Optimized for production workloads
+### Cloud Build Configuration
 
-### Environment Variables Validation
+The `cloudbuild.yaml` file includes:
 
-The application includes comprehensive environment validation:
+- **Branch Detection**: Automatic environment detection based on Git branch
+- **Environment Loading**: Smart configuration loading with fallback mechanisms
+- **Build Optimization**: Efficient caching and parallel processing
+- **Health Checks**: Automatic deployment validation
+- **File Ignoring**: Optimized source upload excluding unnecessary files
 
-```typescript
-// Automatic validation on startup
-- NODE_ENV: Must be 'development' or 'production'
-- PORT: Must be valid port number (1-65535)
-- CORS_ORIGINS: Validated format and accessibility
-- LOG_LEVEL: Must be valid log level
-- MAX_REQUEST_SIZE: Must be valid size format
-```
+### Function Configuration
 
-## 🔒 Security Considerations
+Cloud Functions are configured with:
 
-- **Environment Separation**: Strict separation prevents dev settings in production
-- **CORS Validation**: Environment-specific origin validation with localhost:3000 and localhost:3001 support
-- **Input Validation**: Enhanced validation with TypeScript types and comprehensive error handling
-- **Error Handling**: Environment-appropriate error messages (detailed in dev, generic in prod)
-- **Request Limits**: Configurable request size limits based on environment
-- **Logging**: Secure logging that doesn't expose sensitive data
-- **Type Safety**: TypeScript ensures type safety across the entire application
+- **Runtime**: Node.js 20
+- **Memory**: Configurable (default: 1GB)
+- **Timeout**: 60 seconds
+- **Scaling**: 0-100 instances (configurable)
+- **Trigger**: HTTP with unauthenticated access
+- **Environment Variables**: Automatic injection of configuration
 
-## 📊 Version Management
-
-The application includes automatic version management:
-
-- **Automatic Versioning**: Each deployment increments the patch version
-- **Version Tracking**: Current version stored in `.deployment-version`
-- **Storage Cleanup**: Automatically removes old function source archives
-- **Bucket Lifecycle**: Configured to retain only the latest 5 versions
-
-### Manual Version Control
-
-```bash
-# Check current version
-cat .deployment-version
-
-# Deploy specific version
-cd terraform
-terraform apply -var="deployment_version=v2.0.0"
-```
-
-## 🗑 Cleanup and Removal
-
-### Complete Infrastructure Removal
-
-```bash
-# Remove all infrastructure
-npm run destroy
-
-# Or use the script directly
-bash scripts/destroy.sh
-```
-
-### Advanced Cleanup Options
-
-```bash
-# Force removal without confirmation
-bash scripts/destroy.sh --force
-
-# Remove all local files (state, versions, logs)
-bash scripts/destroy.sh --clean-all
-
-# Remove only Terraform state
-bash scripts/destroy.sh --clean-state
-```
-
-## 🔐 IAM Permissions Setup
-
-### Required IAM Permissions for Cloud Functions Deployment
-
-Before deploying Cloud Functions, you need to configure specific IAM permissions for the Cloud Build service account. This is a **one-time setup** required for your GCP project.
-
-#### Why These Permissions Are Needed
-
-Cloud Functions Gen 2 uses Cloud Build to compile and deploy your code. The Cloud Build service account needs specific permissions to:
-- Write build logs to Cloud Logging
-- Read source code from repositories
-- Create and manage Cloud Run services (Cloud Functions Gen 2 backend)
-
-#### Step-by-Step IAM Setup Guide
-
-**Option 1: Using Google Cloud Console (Recommended)**
-
-1. **Open Google Cloud Console**
-   - Go to [Google Cloud Console](https://console.cloud.google.com/)
-   - Select your project
-
-2. **Navigate to IAM & Admin**
-   - In the left sidebar, click "IAM & Admin" → "IAM"
-
-3. **Find Cloud Build Service Account**
-   - Look for the service account with email: `{PROJECT-NUMBER}@cloudbuild.gserviceaccount.com`
-   - If you don't see it, click "Include Google-provided role grants" checkbox
-
-4. **Add Required Roles**
-   - Click the pencil icon (Edit) next to the Cloud Build service account
-   - Click "ADD ANOTHER ROLE" and add these roles:
-     - `Logs Writer` (roles/logging.logWriter)
-     - `Source Repository Reader` (roles/source.reader)
-     - `Cloud Run Developer` (roles/run.developer) - if not already present
-   - Click "SAVE"
-
-**Option 2: Using gcloud CLI**
-
-```bash
-# Get your project number
-PROJECT_NUMBER=$(gcloud projects describe YOUR_PROJECT_ID --format="value(projectNumber)")
-
-# Grant Logs Writer role
-gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
-    --member="serviceAccount:${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com" \
-    --role="roles/logging.logWriter"
-
-# Grant Source Repository Reader role
-gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
-    --member="serviceAccount:${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com" \
-    --role="roles/source.reader"
-
-# Grant Cloud Run Developer role (if needed)
-gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
-    --member="serviceAccount:${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com" \
-    --role="roles/run.developer"
-```
-
-**Option 3: Using Terraform (Advanced)**
-
-If you prefer to manage IAM through Terraform, you can add this to your `terraform/main.tf`:
-
-```hcl
-# Get project information
-data "google_project" "project" {}
-
-# Grant necessary permissions to Cloud Build service account
-resource "google_project_iam_member" "cloudbuild_logs_writer" {
-  project = var.project_id
-  role    = "roles/logging.logWriter"
-  member  = "serviceAccount:${data.google_project.project.number}@cloudbuild.gserviceaccount.com"
-}
-
-resource "google_project_iam_member" "cloudbuild_source_reader" {
-  project = var.project_id
-  role    = "roles/source.reader"
-  member  = "serviceAccount:${data.google_project.project.number}@cloudbuild.gserviceaccount.com"
-}
-```
-
-#### Verification
-
-After setting up permissions, verify they're correctly applied:
-
-```bash
-# List IAM bindings for your project
-gcloud projects get-iam-policy YOUR_PROJECT_ID \
-    --flatten="bindings[].members" \
-    --format="table(bindings.role)" \
-    --filter="bindings.members:*@cloudbuild.gserviceaccount.com"
-```
-
-You should see the roles listed above in the output.
-
-### Security Considerations
-
-#### Permission Scope
-- **Project-Level**: These permissions apply to the entire GCP project
-- **Service Account**: Only affects the Cloud Build service account
-- **Cost**: IAM permissions are **completely free** - no charges apply
-
-#### What These Permissions Allow
-- `roles/logging.logWriter`: Write build logs to Cloud Logging
-- `roles/source.reader`: Read source code from Cloud Source Repositories
-- `roles/run.developer`: Manage Cloud Run services (Cloud Functions Gen 2 backend)
-
-#### What These Permissions DON'T Allow
-- Access to other GCP resources
-- Modification of IAM policies
-- Access to production data
-- Billing or project management
-
-#### Removing Permissions
-If you need to remove these permissions later:
-
-```bash
-# Remove Logs Writer role
-gcloud projects remove-iam-policy-binding YOUR_PROJECT_ID \
-    --member="serviceAccount:${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com" \
-    --role="roles/logging.logWriter"
-
-# Remove Source Repository Reader role
-gcloud projects remove-iam-policy-binding YOUR_PROJECT_ID \
-    --member="serviceAccount:${PROJECT_NUMBER}@cloudbuild.gserviceaccount.com" \
-    --role="roles/source.reader"
-```
-
-**Note**: Removing these permissions will prevent future Cloud Functions deployments from working, but existing deployed functions will continue to operate normally.
-
-## ❓ Frequently Asked Questions (FAQ)
-
-### General Questions
-
-**Q: Do IAM permissions cost money?**
-A: No, IAM permissions are completely free. You only pay for actual GCP resources like Cloud Functions, storage, and compute time.
-
-**Q: Are these permissions specific to this Cloud Function?**
-A: No, these are project-level permissions that enable Cloud Build to work with any Cloud Function in your project.
-
-**Q: What happens if I don't set up these permissions?**
-A: Deployment will fail with a "missing permission on the build service account" error. Existing functions continue to work.
-
-**Q: Can I use a custom service account instead?**
-A: Yes, but it requires additional configuration. The default Cloud Build service account is recommended for simplicity.
-
-### Deployment Questions
-
-**Q: Why does deployment take so long?**
-A: First deployment takes longer because it:
-- Enables required APIs (Cloud Functions, Cloud Build, Cloud Run)
-- Creates storage buckets
-- Compiles and uploads your code
-- Provisions the Cloud Function infrastructure
-
-**Q: How do I check if my function deployed successfully?**
-A: Check the function URL in the deployment output, or visit the Cloud Functions section in Google Cloud Console.
-
-**Q: Can I deploy to multiple environments?**
-A: Yes, use `npm run deploy:dev` for development and `npm run deploy:prod` for production.
-
-### Development Questions
-
-**Q: How do I test CORS locally?**
-A: Start the dev server (`npm run dev`) and test from `http://localhost:3000` or `http://localhost:3001` in your browser.
-
-**Q: Why am I getting TypeScript errors?**
-A: Ensure you have `@types/node` installed and your `tsconfig.json` is properly configured. Run `npm run build` to check for errors.
-
-**Q: How do I add new API endpoints?**
-A: Create new route files in `src/routes/` following the existing pattern, then import them in `src/routes/index.ts`.
-
-### Troubleshooting Questions
-
-**Q: Deployment fails with "terraform not found"**
-A: Install Terraform: `brew install terraform` (macOS) or `choco install terraform` (Windows).
-
-**Q: Getting "authentication required" errors?**
-A: Run `gcloud auth login` and `gcloud config set project YOUR_PROJECT_ID`.
-
-**Q: Function returns 500 errors after deployment?**
-A: Check the function logs in Google Cloud Console → Cloud Functions → Your Function → Logs.
-
-**Q: CORS errors in production?**
-A: Verify your production domains are correctly listed in `.env.production` under `CORS_ORIGINS`.
-
-### Cost and Billing Questions
-
-**Q: How much does this cost to run?**
-A: Cloud Functions pricing depends on usage:
-- **Free tier**: 2 million invocations/month
-- **Compute time**: $0.0000025 per 100ms (1GB memory)
-- **Storage**: ~$0.02/month for source code storage
-- **Typical cost**: $0-5/month for development projects
-
-**Q: How do I minimize costs?**
-A: 
-- Set `min_instances = 0` in terraform.tfvars (default)
-- Use appropriate memory allocation (1GB is usually sufficient)
-- Monitor usage in Google Cloud Console
-
-**Q: What happens if I exceed the free tier?**
-A: You'll be charged according to Google Cloud Functions pricing. Set up billing alerts to monitor usage.
-##  Troubleshooting
+## 🚨 Troubleshooting
 
 ### Common Issues
 
-1. **NODE_ENV Error**
+1. **Deployment Fails with API Not Enabled**:
    ```bash
-   # Fixed with cross-env in package.json
-   npm run dev  # Now works correctly
+   # Enable required APIs
+   gcloud services enable cloudfunctions.googleapis.com cloudbuild.googleapis.com run.googleapis.com
    ```
 
-2. **TypeScript Build Errors**
+2. **Authentication Errors**:
    ```bash
-   # Check TypeScript configuration
-   npm run build
-   # Fix any type errors before deployment
-   ```
-
-3. **CORS Issues**
-   - Verify CORS_ORIGINS in environment files
-   - Check browser console for CORS errors
-   - Ensure origins match exactly (including protocol)
-
-4. **Authentication Error**
-   ```bash
+   # Re-authenticate
    gcloud auth login
    gcloud config set project YOUR_PROJECT_ID
    ```
 
-5. **Terraform State Issues**
+3. **TypeScript Compilation Errors**:
    ```bash
-   cd terraform
-   terraform init -reconfigure
+   # Clean and rebuild
+   rm -rf dist node_modules
+   npm install
+   npm run build
    ```
 
-### Getting Help
+4. **CORS Issues**:
+   - Check CORS_ORIGINS in environment files
+   - Verify origin matches exactly (including protocol and port)
+   - Test from allowed origins only
 
-- Check deployment logs: `cat deployment-production.log` or `cat deployment-development.log`
-- View GCP function logs in the Console
-- Verify Terraform state: `terraform show`
-- Check development server logs in terminal
+5. **Function Not Responding**:
+   - Check Cloud Function logs: `gcloud functions logs read FUNCTION_NAME`
+   - Verify health check endpoint: `curl FUNCTION_URL/health`
+   - Check environment variables in Cloud Console
+
+### Debug Commands
+
+```bash
+# Check function status
+gcloud functions describe FUNCTION_NAME --region=REGION
+
+# View function logs
+gcloud functions logs read FUNCTION_NAME --region=REGION --limit=50
+
+# Test local deployment
+bash scripts/deploy-local.sh development
+
+# Validate project setup
+bash scripts/validate.sh
+
+# Test API endpoints
+bash scripts/test-api.sh development
+```
+
+## 📚 Additional Resources
+
+- [Google Cloud Functions Documentation](https://cloud.google.com/functions/docs)
+- [Google Cloud Build Documentation](https://cloud.google.com/build/docs)
+- [Hono.js Documentation](https://hono.dev/)
+- [TypeScript Documentation](https://www.typescriptlang.org/docs/)
 
 ## 📄 License
 
-MIT License - see LICENSE file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## 🤝 Contributing
+## 👨‍💻 Author
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes following the modular architecture
-4. Test thoroughly with both `npm run dev` and `npm run dev:prod`
-5. Run linting and formatting: `npm run check:fix`
-6. Submit a pull request
+**Jackson Kasi**
 
 ---
 
-**Note**: This application features a clean, modular architecture with comprehensive TypeScript support, environment separation, and production-ready deployment processes. The codebase is organized by domain (users, courses) with shared utilities and types for maximum maintainability and scalability.
+**Note**: This project has been completely refactored to eliminate Terraform dependencies and use Google Cloud Build for deployment. All Terraform-related files and references have been removed and replaced with a modern, simplified Cloud Build-based deployment system.

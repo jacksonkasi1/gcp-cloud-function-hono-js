@@ -1,0 +1,266 @@
+# Google Cloud Build Configuration for GCP Function Deployment
+# Supports branch-based deployment: dev branch -> development, production branch -> production
+# Environment configuration priority: local env files first, then GitHub Secrets as fallback
+
+steps:
+  # Step 1: Determine environment based on branch
+  - name: 'gcr.io/cloud-builders/gcloud'
+    id: 'determine-environment'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        if [[ "$BRANCH_NAME" == "dev" ]]; then
+          echo "development" > /workspace/target_env
+          echo "Development environment detected"
+        elif [[ "$BRANCH_NAME" == "production" ]]; then
+          echo "production" > /workspace/target_env
+          echo "Production environment detected"
+        else
+          echo "Unknown branch: $BRANCH_NAME. Defaulting to development"
+          echo "development" > /workspace/target_env
+        fi
+        
+        TARGET_ENV=$(cat /workspace/target_env)
+        echo "Target environment: $TARGET_ENV"
+        
+        # Set function name based on environment
+        if [[ "$TARGET_ENV" == "production" ]]; then
+          echo "hono-serverless-api" > /workspace/function_name
+        else
+          echo "hono-serverless-api-dev" > /workspace/function_name
+        fi
+        
+        FUNCTION_NAME=$(cat /workspace/function_name)
+        echo "Function name: $FUNCTION_NAME"
+
+  # Step 2: Load environment configuration with fallback to secrets
+  - name: 'gcr.io/cloud-builders/gcloud'
+    id: 'load-environment'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        TARGET_ENV=$(cat /workspace/target_env)
+        echo "Loading configuration for environment: $TARGET_ENV"
+        
+        # Check if environment file exists
+        if [[ -f ".env.$TARGET_ENV" ]]; then
+          echo "Using local environment file: .env.$TARGET_ENV"
+          cp ".env.$TARGET_ENV" /workspace/runtime.env
+        else
+          echo "Environment file .env.$TARGET_ENV not found, using GitHub Secrets fallback"
+          
+          # Create environment file from secrets based on target environment
+          if [[ "$TARGET_ENV" == "production" ]]; then
+            cat > /workspace/runtime.env << EOF
+        NODE_ENV=production
+        PORT=8080
+        LOG_LEVEL=info
+        MAX_REQUEST_SIZE=5mb
+        CORS_ORIGINS=$_PROD_CORS_ORIGINS
+        FUNCTION_VERSION=$_PROD_FUNCTION_VERSION
+        FUNCTION_REGION=$_PROD_FUNCTION_REGION
+        FUNCTION_MEMORY=$_PROD_FUNCTION_MEMORY
+        EOF
+          else
+            cat > /workspace/runtime.env << EOF
+        NODE_ENV=development
+        PORT=8080
+        LOG_LEVEL=debug
+        MAX_REQUEST_SIZE=10mb
+        CORS_ORIGINS=$_DEV_CORS_ORIGINS
+        FUNCTION_VERSION=$_DEV_FUNCTION_VERSION
+        FUNCTION_REGION=$_DEV_FUNCTION_REGION
+        FUNCTION_MEMORY=$_DEV_FUNCTION_MEMORY
+        EOF
+          fi
+        fi
+        
+        echo "Environment configuration loaded:"
+        cat /workspace/runtime.env
+
+  # Step 3: Install dependencies
+  - name: 'node:20'
+    id: 'install-dependencies'
+    entrypoint: 'npm'
+    args: ['install']
+    env:
+      - 'NODE_ENV=production'
+
+  # Step 4: Build TypeScript
+  - name: 'node:20'
+    id: 'build-typescript'
+    entrypoint: 'npm'
+    args: ['run', 'build']
+
+  # Step 5: Prepare deployment package
+  - name: 'gcr.io/cloud-builders/gcloud'
+    id: 'prepare-deployment'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        TARGET_ENV=$(cat /workspace/target_env)
+        FUNCTION_NAME=$(cat /workspace/function_name)
+        
+        echo "Preparing deployment package for $TARGET_ENV environment"
+        
+        # Create deployment directory
+        mkdir -p /workspace/deploy
+        
+        # Copy necessary files
+        cp package.json /workspace/deploy/
+        cp pnpm-lock.yaml /workspace/deploy/ 2>/dev/null || echo "pnpm-lock.yaml not found, skipping"
+        cp -r dist /workspace/deploy/
+        cp -r node_modules /workspace/deploy/
+        
+        # Copy environment configuration
+        cp /workspace/runtime.env /workspace/deploy/.env
+        
+        echo "Deployment package prepared"
+        ls -la /workspace/deploy/
+
+  # Step 6: Deploy Cloud Function
+  - name: 'gcr.io/cloud-builders/gcloud'
+    id: 'deploy-function'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        TARGET_ENV=$(cat /workspace/target_env)
+        FUNCTION_NAME=$(cat /workspace/function_name)
+        
+        # Load environment variables for deployment configuration
+        source /workspace/runtime.env
+        
+        # Set deployment region (default to asia-south1 if not specified)
+        REGION=${FUNCTION_REGION:-asia-south1}
+        
+        # Set memory allocation (default to 1GB if not specified)
+        MEMORY=${FUNCTION_MEMORY:-1GB}
+        
+        # Convert memory format for gcloud (1GB -> 1Gi, 2GB -> 2Gi, etc.)
+        if [[ "$MEMORY" =~ ^([0-9]+)GB$ ]]; then
+          MEMORY_GI="${BASH_REMATCH[1]}Gi"
+        elif [[ "$MEMORY" =~ ^([0-9]+)MB$ ]]; then
+          MEMORY_MB="${BASH_REMATCH[1]}"
+          MEMORY_GI="${MEMORY_MB}Mi"
+        else
+          MEMORY_GI="1Gi"  # Default fallback
+        fi
+        
+        echo "Deploying function: $FUNCTION_NAME"
+        echo "Region: $REGION"
+        echo "Memory: $MEMORY_GI"
+        echo "Environment: $TARGET_ENV"
+        
+        cd /workspace/deploy
+        
+        # Deploy Cloud Function (Gen 2)
+        gcloud functions deploy $FUNCTION_NAME \
+          --gen2 \
+          --runtime=nodejs20 \
+          --region=$REGION \
+          --source=. \
+          --entry-point=default \
+          --trigger-http \
+          --allow-unauthenticated \
+          --memory=$MEMORY_GI \
+          --timeout=60s \
+          --max-instances=100 \
+          --min-instances=0 \
+          --set-env-vars="NODE_ENV=$NODE_ENV,FUNCTION_VERSION=$FUNCTION_VERSION,FUNCTION_REGION=$REGION,FUNCTION_MEMORY=$MEMORY" \
+          --quiet
+
+  # Step 7: Health check
+  - name: 'gcr.io/cloud-builders/gcloud'
+    id: 'health-check'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        TARGET_ENV=$(cat /workspace/target_env)
+        FUNCTION_NAME=$(cat /workspace/function_name)
+        
+        # Load environment variables
+        source /workspace/runtime.env
+        REGION=${FUNCTION_REGION:-asia-south1}
+        
+        echo "Performing health check for deployed function..."
+        
+        # Get function URL
+        FUNCTION_URL=$(gcloud functions describe $FUNCTION_NAME --region=$REGION --format="value(serviceConfig.uri)")
+        
+        if [[ -z "$FUNCTION_URL" ]]; then
+          echo "ERROR: Could not retrieve function URL"
+          exit 1
+        fi
+        
+        echo "Function URL: $FUNCTION_URL"
+        
+        # Wait a moment for function to be ready
+        sleep 10
+        
+        # Perform health check
+        echo "Testing health endpoint..."
+        HEALTH_RESPONSE=$(curl -s -w "%{http_code}" -o /tmp/health_response.json "$FUNCTION_URL/health" || echo "000")
+        
+        if [[ "$HEALTH_RESPONSE" == "200" ]]; then
+          echo "✅ Health check passed!"
+          echo "Response:"
+          cat /tmp/health_response.json | jq '.' 2>/dev/null || cat /tmp/health_response.json
+        else
+          echo "❌ Health check failed with status: $HEALTH_RESPONSE"
+          echo "Response:"
+          cat /tmp/health_response.json 2>/dev/null || echo "No response body"
+          exit 1
+        fi
+        
+        echo ""
+        echo "🚀 Deployment successful!"
+        echo "Function Name: $FUNCTION_NAME"
+        echo "Environment: $TARGET_ENV"
+        echo "Region: $REGION"
+        echo "URL: $FUNCTION_URL"
+        echo "Health Check: $FUNCTION_URL/health"
+        echo "API Endpoints: $FUNCTION_URL/api/users, $FUNCTION_URL/api/courses"
+
+# Ignore unnecessary files during build
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: 'E2_HIGHCPU_8'
+  
+# Files to ignore during source upload
+ignoredFiles:
+  - '.git/**'
+  - '.gitignore'
+  - 'terraform/**'
+  - 'scripts/**'
+  - 'docs/**'
+  - '*.md'
+  - '.env.*'
+  - 'biome.json'
+  - 'tsconfig.json'
+  - '.gitlab-ci.yml'
+  - 'Dockerfile.*'
+  - 'ci-cd.md'
+  - 'DEPLOYMENT-SETUP.md'
+  - 'notes.txt'
+
+# Substitution variables for GitHub Secrets fallback
+substitutions:
+  # Development environment secrets
+  _DEV_CORS_ORIGINS: 'http://localhost:3000,http://localhost:3001'
+  _DEV_FUNCTION_VERSION: 'dev-${SHORT_SHA}'
+  _DEV_FUNCTION_REGION: 'asia-south1'
+  _DEV_FUNCTION_MEMORY: '1GB'
+  
+  # Production environment secrets
+  _PROD_CORS_ORIGINS: 'https://example.com'
+  _PROD_FUNCTION_VERSION: 'prod-${SHORT_SHA}'
+  _PROD_FUNCTION_REGION: 'asia-south1'
+  _PROD_FUNCTION_MEMORY: '1GB'
+
+# Timeout for the entire build
+timeout: '1200s'

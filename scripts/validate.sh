@@ -1,10 +1,10 @@
 #!/bin/bash
 
 # =============================================================================
-# Project Validation Script
+# Project Validation Script - Cloud Build Version
 # =============================================================================
 # This script validates that all components of the serverless application
-# are properly configured and ready for deployment
+# are properly configured and ready for deployment using Google Cloud Build
 # =============================================================================
 
 set -euo pipefail
@@ -19,7 +19,6 @@ NC='\033[0m' # No Color
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-TERRAFORM_DIR="$PROJECT_ROOT/terraform"
 
 # Validation counters
 PASSED=0
@@ -62,14 +61,14 @@ validate_project_structure() {
     local required_files=(
         "package.json"
         "src/index.ts"
-        "terraform/main.tf"
-        "terraform/variables.tf"
-        "terraform/outputs.tf"
-        "terraform/terraform.tfvars.example"
-        "scripts/deploy.sh"
-        "scripts/destroy.sh"
+        "cloudbuild.yaml"
+        "scripts/deploy-local.sh"
+        "scripts/test-api.sh"
+        ".env.development"
+        ".env.production"
         "README.md"
         ".gitignore"
+        "tsconfig.json"
     )
     
     for file in "${required_files[@]}"; do
@@ -79,6 +78,13 @@ validate_project_structure() {
             log "FAIL" "Missing required file: $file"
         fi
     done
+    
+    # Check that Terraform files are removed
+    if [ -d "$PROJECT_ROOT/terraform" ]; then
+        log "FAIL" "Terraform directory still exists - should be removed"
+    else
+        log "PASS" "Terraform directory properly removed"
+    fi
 }
 
 validate_nodejs_setup() {
@@ -110,6 +116,13 @@ validate_nodejs_setup() {
     if [ -f "$PROJECT_ROOT/package.json" ]; then
         if cd "$PROJECT_ROOT" && node -e "JSON.parse(require('fs').readFileSync('package.json', 'utf8'))" &> /dev/null; then
             log "PASS" "package.json is valid JSON"
+            
+            # Check that Terraform references are removed
+            if grep -q "terraform" "$PROJECT_ROOT/package.json"; then
+                log "FAIL" "package.json still contains Terraform references"
+            else
+                log "PASS" "package.json cleaned of Terraform references"
+            fi
         else
             log "FAIL" "package.json is invalid JSON"
         fi
@@ -150,38 +163,39 @@ validate_dependencies() {
     fi
 }
 
-validate_terraform_setup() {
-    log "INFO" "Validating Terraform setup..."
+validate_cloud_build_setup() {
+    log "INFO" "Validating Google Cloud Build setup..."
     
-    # Check Terraform installation
-    if command -v terraform &> /dev/null; then
-        local tf_version=$(terraform version | head -n1 | cut -d' ' -f2)
-        log "PASS" "Terraform version $tf_version"
-    else
-        log "FAIL" "Terraform not installed or not in PATH"
-    fi
-    
-    # Check Terraform files
-    cd "$TERRAFORM_DIR"
-    
-    # Validate Terraform syntax
-    if terraform validate &> /dev/null; then
-        log "PASS" "Terraform configuration is valid"
-    else
-        log "FAIL" "Terraform configuration has syntax errors"
-    fi
-    
-    # Check for terraform.tfvars
-    if [ -f "terraform.tfvars" ]; then
-        local project_id=$(grep '^project_id' terraform.tfvars | cut -d'"' -f2 2>/dev/null || echo "")
+    # Check cloudbuild.yaml
+    if [ -f "$PROJECT_ROOT/cloudbuild.yaml" ]; then
+        log "PASS" "cloudbuild.yaml exists"
         
-        if [ "$project_id" != "your-gcp-project-id" ] && [ -n "$project_id" ]; then
-            log "PASS" "terraform.tfvars configured with project_id: $project_id"
+        # Check for required sections
+        if grep -q "steps:" "$PROJECT_ROOT/cloudbuild.yaml"; then
+            log "PASS" "cloudbuild.yaml contains build steps"
         else
-            log "FAIL" "terraform.tfvars not properly configured (set project_id)"
+            log "FAIL" "cloudbuild.yaml missing build steps"
+        fi
+        
+        if grep -q "gcloud functions deploy" "$PROJECT_ROOT/cloudbuild.yaml"; then
+            log "PASS" "cloudbuild.yaml contains function deployment"
+        else
+            log "FAIL" "cloudbuild.yaml missing function deployment step"
+        fi
+        
+        if grep -q "nodejs20" "$PROJECT_ROOT/cloudbuild.yaml"; then
+            log "PASS" "cloudbuild.yaml configured for Node.js 20"
+        else
+            log "FAIL" "cloudbuild.yaml missing Node.js 20 runtime"
+        fi
+        
+        if grep -q "health" "$PROJECT_ROOT/cloudbuild.yaml"; then
+            log "PASS" "cloudbuild.yaml includes health check"
+        else
+            log "WARN" "cloudbuild.yaml missing health check step"
         fi
     else
-        log "WARN" "terraform.tfvars not found (copy from terraform.tfvars.example)"
+        log "FAIL" "cloudbuild.yaml missing"
     fi
 }
 
@@ -206,11 +220,112 @@ validate_gcp_setup() {
         if [ -n "$default_project" ]; then
             log "PASS" "Default GCP project: $default_project"
         else
-            log "WARN" "No default GCP project set"
+            log "WARN" "No default GCP project set (run 'gcloud config set project PROJECT_ID')"
+        fi
+        
+        # Check required APIs (if project is set)
+        if [ -n "$default_project" ]; then
+            local required_apis=("cloudfunctions.googleapis.com" "cloudbuild.googleapis.com" "run.googleapis.com")
+            
+            for api in "${required_apis[@]}"; do
+                if gcloud services list --enabled --filter="name:$api" --format="value(name)" 2>/dev/null | grep -q "$api"; then
+                    log "PASS" "Required API enabled: $api"
+                else
+                    log "WARN" "Required API not enabled: $api (enable with: gcloud services enable $api)"
+                fi
+            done
         fi
     else
         log "FAIL" "gcloud CLI not installed or not in PATH"
     fi
+}
+
+validate_environment_files() {
+    log "INFO" "Validating environment configuration..."
+    
+    # Check development environment
+    if [ -f "$PROJECT_ROOT/.env.development" ]; then
+        log "PASS" ".env.development exists"
+        
+        if grep -q "NODE_ENV=development" "$PROJECT_ROOT/.env.development"; then
+            log "PASS" ".env.development has correct NODE_ENV"
+        else
+            log "FAIL" ".env.development missing NODE_ENV=development"
+        fi
+        
+        if grep -q "CORS_ORIGINS=" "$PROJECT_ROOT/.env.development"; then
+            log "PASS" ".env.development has CORS_ORIGINS configured"
+        else
+            log "FAIL" ".env.development missing CORS_ORIGINS"
+        fi
+        
+        # Validate development region
+        if grep -q "FUNCTION_REGION=" "$PROJECT_ROOT/.env.development"; then
+            local dev_region=$(grep "FUNCTION_REGION=" "$PROJECT_ROOT/.env.development" | cut -d'=' -f2)
+            if validate_gcp_region "$dev_region"; then
+                log "PASS" ".env.development has valid GCP region: $dev_region"
+            else
+                log "FAIL" ".env.development has invalid GCP region: $dev_region"
+            fi
+        else
+            log "FAIL" ".env.development missing FUNCTION_REGION"
+        fi
+    else
+        log "FAIL" ".env.development missing"
+    fi
+    
+    # Check production environment
+    if [ -f "$PROJECT_ROOT/.env.production" ]; then
+        log "PASS" ".env.production exists"
+        
+        if grep -q "NODE_ENV=production" "$PROJECT_ROOT/.env.production"; then
+            log "PASS" ".env.production has correct NODE_ENV"
+        else
+            log "FAIL" ".env.production missing NODE_ENV=production"
+        fi
+        
+        if grep -q "CORS_ORIGINS=" "$PROJECT_ROOT/.env.production"; then
+            log "PASS" ".env.production has CORS_ORIGINS configured"
+        else
+            log "FAIL" ".env.production missing CORS_ORIGINS"
+        fi
+        
+        # Validate production region
+        if grep -q "FUNCTION_REGION=" "$PROJECT_ROOT/.env.production"; then
+            local prod_region=$(grep "FUNCTION_REGION=" "$PROJECT_ROOT/.env.production" | cut -d'=' -f2)
+            if validate_gcp_region "$prod_region"; then
+                log "PASS" ".env.production has valid GCP region: $prod_region"
+            else
+                log "FAIL" ".env.production has invalid GCP region: $prod_region"
+            fi
+        else
+            log "FAIL" ".env.production missing FUNCTION_REGION"
+        fi
+    else
+        log "FAIL" ".env.production missing"
+    fi
+}
+
+# Function to validate GCP regions
+validate_gcp_region() {
+    local region="$1"
+    local valid_regions=(
+        "us-central1" "us-east1" "us-east4" "us-west1" "us-west2" "us-west3" "us-west4"
+        "europe-west1" "europe-west2" "europe-west3" "europe-west4" "europe-west6"
+        "europe-central2" "europe-north1"
+        "asia-east1" "asia-east2" "asia-northeast1" "asia-northeast2" "asia-northeast3"
+        "asia-south1" "asia-southeast1" "asia-southeast2"
+        "australia-southeast1" "australia-southeast2"
+        "southamerica-east1"
+    )
+    
+    for valid_region in "${valid_regions[@]}"; do
+        if [[ "$region" == "$valid_region" ]]; then
+            return 0
+        fi
+    done
+    
+    return 1
 }
 
 validate_source_code() {
@@ -231,19 +346,6 @@ validate_source_code() {
             log "FAIL" "@hono/node-server import missing from src/index.ts"
         fi
         
-        # Check for required routes
-        if grep -q "/health" "$PROJECT_ROOT/src/index.ts"; then
-            log "PASS" "Health check route found"
-        else
-            log "FAIL" "Health check route missing"
-        fi
-        
-        if grep -q "/api/users" "$PROJECT_ROOT/src/index.ts" || grep -q "/users" "$PROJECT_ROOT/src/index.ts"; then
-            log "PASS" "Users API route found"
-        else
-            log "FAIL" "Users API route missing"
-        fi
-        
         # Check for export
         if grep -q "export default" "$PROJECT_ROOT/src/index.ts"; then
             log "PASS" "Default export found for Cloud Functions"
@@ -251,12 +353,27 @@ validate_source_code() {
             log "FAIL" "Default export missing (required for Cloud Functions)"
         fi
     fi
+    
+    # Check routes file
+    if [ -f "$PROJECT_ROOT/src/routes/index.ts" ]; then
+        if grep -q "/health" "$PROJECT_ROOT/src/routes/index.ts"; then
+            log "PASS" "Health check route found"
+        else
+            log "FAIL" "Health check route missing"
+        fi
+        
+        if grep -q "/api/users" "$PROJECT_ROOT/src/routes/index.ts" || grep -q "userRoutes" "$PROJECT_ROOT/src/routes/index.ts"; then
+            log "PASS" "Users API route found"
+        else
+            log "FAIL" "Users API route missing"
+        fi
+    fi
 }
 
 validate_scripts() {
     log "INFO" "Validating deployment scripts..."
     
-    local scripts=("deploy.sh" "destroy.sh" "dev.sh")
+    local scripts=("deploy-local.sh" "test-api.sh" "validate.sh")
     
     for script in "${scripts[@]}"; do
         if [ -f "$PROJECT_ROOT/scripts/$script" ]; then
@@ -268,10 +385,51 @@ validate_scripts() {
             else
                 log "WARN" "Script missing shebang: $script"
             fi
+            
+            # Check if script is executable
+            if [ -x "$PROJECT_ROOT/scripts/$script" ]; then
+                log "PASS" "Script is executable: $script"
+            else
+                log "WARN" "Script not executable: $script (run: chmod +x scripts/$script)"
+            fi
         else
             log "FAIL" "Script missing: $script"
         fi
     done
+    
+    # Check that old Terraform scripts are removed
+    local old_scripts=("deploy.sh" "destroy.sh" "deploy-ci.sh" "test-ci-cd.sh" "load-env.sh")
+    
+    for script in "${old_scripts[@]}"; do
+        if [ -f "$PROJECT_ROOT/scripts/$script" ]; then
+            log "FAIL" "Old Terraform script still exists: $script (should be removed)"
+        else
+            log "PASS" "Old Terraform script properly removed: $script"
+        fi
+    done
+}
+
+validate_typescript_config() {
+    log "INFO" "Validating TypeScript configuration..."
+    
+    if [ -f "$PROJECT_ROOT/tsconfig.json" ]; then
+        log "PASS" "tsconfig.json exists"
+        
+        if cd "$PROJECT_ROOT" && node -e "JSON.parse(require('fs').readFileSync('tsconfig.json', 'utf8'))" &> /dev/null; then
+            log "PASS" "tsconfig.json is valid JSON"
+        else
+            log "FAIL" "tsconfig.json is invalid JSON"
+        fi
+        
+        # Check if TypeScript can compile
+        if cd "$PROJECT_ROOT" && npm run build &> /dev/null; then
+            log "PASS" "TypeScript compilation successful"
+        else
+            log "FAIL" "TypeScript compilation failed (run: npm run build)"
+        fi
+    else
+        log "FAIL" "tsconfig.json missing"
+    fi
 }
 
 # =============================================================================
@@ -279,8 +437,8 @@ validate_scripts() {
 # =============================================================================
 
 main() {
-    echo -e "${BLUE}🔍 GCP Hono.js Serverless Application Validation${NC}"
-    echo -e "${BLUE}================================================${NC}"
+    echo -e "${BLUE}🔍 GCP Cloud Build Serverless Application Validation${NC}"
+    echo -e "${BLUE}====================================================${NC}"
     echo ""
     
     validate_project_structure
@@ -292,16 +450,22 @@ main() {
     validate_dependencies
     echo ""
     
-    validate_terraform_setup
+    validate_cloud_build_setup
     echo ""
     
     validate_gcp_setup
+    echo ""
+    
+    validate_environment_files
     echo ""
     
     validate_source_code
     echo ""
     
     validate_scripts
+    echo ""
+    
+    validate_typescript_config
     echo ""
     
     # Summary
@@ -313,10 +477,29 @@ main() {
     
     if [ $FAILED -eq 0 ]; then
         echo -e "${GREEN}🎉 All validations passed! Your project is ready for deployment.${NC}"
-        echo -e "${GREEN}Run 'npm run deploy' or 'bash scripts/deploy.sh' to deploy.${NC}"
+        echo ""
+        echo -e "${GREEN}📋 Next Steps:${NC}"
+        echo -e "${GREEN}  Local Deployment:${NC}"
+        echo -e "${GREEN}    npm run deploy:dev    # Deploy to development${NC}"
+        echo -e "${GREEN}    npm run deploy:prod   # Deploy to production${NC}"
+        echo ""
+        echo -e "${GREEN}  Cloud Build Deployment:${NC}"
+        echo -e "${GREEN}    Push to 'dev' branch for development deployment${NC}"
+        echo -e "${GREEN}    Push to 'production' branch for production deployment${NC}"
+        echo ""
+        echo -e "${GREEN}  API Testing:${NC}"
+        echo -e "${GREEN}    npm run test:api:dev   # Test development API${NC}"
+        echo -e "${GREEN}    npm run test:api:prod  # Test production API${NC}"
         exit 0
     else
         echo -e "${RED}⚠️  Some validations failed. Please fix the issues above before deploying.${NC}"
+        echo ""
+        echo -e "${YELLOW}📋 Common Fixes:${NC}"
+        echo -e "${YELLOW}  • Run 'npm install' to install dependencies${NC}"
+        echo -e "${YELLOW}  • Run 'gcloud auth login' to authenticate${NC}"
+        echo -e "${YELLOW}  • Run 'gcloud config set project PROJECT_ID' to set project${NC}"
+        echo -e "${YELLOW}  • Enable required APIs: gcloud services enable cloudfunctions.googleapis.com cloudbuild.googleapis.com run.googleapis.com${NC}"
+        echo -e "${YELLOW}  • Make scripts executable: chmod +x scripts/*.sh${NC}"
         exit 1
     fi
 }
@@ -330,7 +513,7 @@ while [[ $# -gt 0 ]]; do
             echo "Options:"
             echo "  -h, --help     Show this help message"
             echo ""
-            echo "This script validates the complete serverless application setup."
+            echo "This script validates the complete serverless application setup for Google Cloud Build deployment."
             exit 0
             ;;
         *)

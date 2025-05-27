@@ -1,9 +1,8 @@
 {
-  "name": "gcp-hono-serverless",
+  "name": "gcp-hono-cloudrun",
   "version": "1.0.0",
-  "description": "TypeScript-based serverless application using Hono.js framework for GCP Cloud Functions with CORS support",
+  "description": "TypeScript-based application using Hono.js framework for GCP Cloud Run with CORS support",
   "main": "dist/index.js",
-  "type": "module",
   "engines": {
     "node": ">=20.0.0"
   },
@@ -11,7 +10,7 @@
     "start": "node dist/index.js",
     "dev": "cross-env NODE_ENV=development tsx watch src/index.ts",
     "dev:prod": "cross-env NODE_ENV=production tsx watch src/index.ts",
-    "build": "tsc",
+    "build": "tsc && tsc-alias",
     "build:watch": "tsc --watch",
     "test": "echo 'Tests not implemented yet'",
     "lint": "biome lint src/",
@@ -21,18 +20,12 @@
     "check": "biome check src/",
     "check:fix": "biome check --write src/",
     "validate": "bash scripts/validate.sh",
-    "deploy": "bash scripts/deploy.sh",
-    "deploy:dev": "NODE_ENV=development bash scripts/deploy.sh",
-    "deploy:prod": "NODE_ENV=production bash scripts/deploy.sh",
-    "deploy:ci": "bash scripts/deploy-ci.sh",
-    "test:api": "bash scripts/test-ci-cd.sh",
-    "test:api:dev": "bash scripts/test-ci-cd.sh development",
-    "test:api:prod": "bash scripts/test-ci-cd.sh production",
-    "destroy": "bash scripts/destroy.sh",
-    "tf-init": "cd terraform && terraform init",
-    "tf-plan": "cd terraform && terraform plan",
-    "tf-apply": "cd terraform && terraform apply",
-    "tf-destroy": "cd terraform && terraform destroy"
+    "fix:permissions": "bash scripts/fix-build-permissions.sh",
+    "deploy:dev": "bash scripts/deploy-simple.sh development",
+    "deploy:prod": "bash scripts/deploy-simple.sh production",
+    "test:api": "bash scripts/test-api.sh",
+    "test:api:dev": "bash scripts/test-api.sh development",
+    "test:api:prod": "bash scripts/test-api.sh production"
   },
   "dependencies": {
     "@hono/node-server": "^1.8.0",
@@ -45,16 +38,18 @@
     "@biomejs/biome": "1.9.4",
     "@types/node": "^20.17.50",
     "cross-env": "^7.0.3",
+    "tsc-alias": "^1.8.16",
     "tsx": "^4.7.1",
     "typescript": "^5.3.3"
   },
   "keywords": [
-    "serverless",
+    "cloud-run",
     "gcp",
-    "cloud-functions",
+    "containerized",
+    "cloud-build",
     "hono",
     "nodejs",
-    "terraform"
+    "typescript"
   ],
   "author": "Jackson Kasi",
   "license": "MIT"

@@ -32,7 +32,6 @@ const loadEnvironmentConfig = () => {
 
     logger.info('Environment configuration loaded', {
       environment: env.NODE_ENV,
-      port: env.PORT,
       corsOrigins: env.CORS_ORIGINS.join(', ') || 'None configured',
       logLevel: env.LOG_LEVEL,
     })
@@ -45,6 +44,14 @@ const loadEnvironmentConfig = () => {
 // Middleware setup
 app.use('*', honoLogger())
 app.use('*', prettyJSON())
+
+// Debug middleware - add this before CORS
+app.use('*', async (c, next) => {
+  console.log('Request headers type:', typeof c.req.raw.headers)
+  console.log('Request headers methods:', Object.getOwnPropertyNames(c.req.raw.headers))
+  console.log('Has get method:', typeof c.req.raw.headers.get)
+  await next()
+})
 
 // CORS configuration with environment-specific origins
 app.use(
@@ -138,27 +145,21 @@ app.notFound((c) => {
 // Initialize environment configuration
 loadEnvironmentConfig()
 
-// For Cloud Functions, we need to export the app.fetch function
-export default app.fetch
+// Start the server (for Cloud Run and local development)
+const port = Number(process.env.PORT) || 8080
 
-// For local development with hot reload
-if (isDevelopment) {
-  const port = env.PORT
+serve({
+  fetch: app.fetch,
+  port: port
+}, (info) => {
+  logger.info('🚀 Server running', {
+    url: `http://localhost:${info.port}`,
+    healthCheck: `http://localhost:${info.port}/health`,
+    corsOrigins: env.CORS_ORIGINS.join(', '),
+    logLevel: env.LOG_LEVEL,
+    environment: env.NODE_ENV,
+  })
+})
 
-  serve(
-    {
-      fetch: app.fetch,
-      port: port,
-    },
-    (info) => {
-      logger.info('🚀 Development server running', {
-        url: `http://localhost:${info.port}`,
-        healthCheck: `http://localhost:${info.port}/health`,
-        usersApi: `http://localhost:${info.port}/api/users`,
-        coursesApi: `http://localhost:${info.port}/api/courses`,
-        corsOrigins: env.CORS_ORIGINS.join(', '),
-        logLevel: env.LOG_LEVEL,
-      })
-    }
-  )
-}
+// Export the app for testing purposes
+export default app

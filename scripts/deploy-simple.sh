@@ -135,6 +135,18 @@ cleanup_old_images() {
     done
 }
 
+# Function to properly escape YAML values
+escape_yaml_value() {
+    local value="$1"
+    # If value contains special characters, spaces, or starts with special chars, quote it
+    if [[ "$value" =~ [[:space:]|\|\>\<\[\]\{\}\*\&\!\%\@\`] ]] || [[ "$value" =~ ^[-\?\:\,] ]]; then
+        # Escape any existing quotes and wrap in quotes
+        echo "\"$(echo "$value" | sed 's/"/\\"/g')\""
+    else
+        echo "$value"
+    fi
+}
+
 # Determine environment
 ENVIRONMENT=${1:-development}
 
@@ -152,13 +164,6 @@ if [[ ! -f "$CREDENTIAL_FILE" ]]; then
     print_error "Please create $CREDENTIAL_FILE with your service account key"
     print_error "Make sure to add your actual GCP service account JSON key to this file"
     exit 1
-fi
-
-# Set service name based on environment
-if [[ "$ENVIRONMENT" == "production" ]]; then
-    SERVICE_NAME="hono-serverless-api"
-else
-    SERVICE_NAME="hono-serverless-api-dev"
 fi
 
 # Check if environment file exists
@@ -179,11 +184,49 @@ set +a
 # Unset PORT to avoid conflicts with Cloud Run
 unset PORT
 
-# Set defaults if not specified
-REGION=${CLOUD_RUN_REGION:-asia-south1}
+# Validate required environment variables
+print_status "Validating required environment variables..."
+
+VALIDATION_FAILED=false
+
+if [[ -z "$SERVICE_NAME" ]]; then
+    print_error "SERVICE_NAME is required but not set in $ENV_FILE"
+    VALIDATION_FAILED=true
+fi
+
+if [[ -z "$GCP_PROJECT_ID" ]]; then
+    print_error "GCP_PROJECT_ID is required but not set in $ENV_FILE"
+    VALIDATION_FAILED=true
+fi
+
+if [[ -z "$CLOUD_RUN_REGION" ]]; then
+    print_error "CLOUD_RUN_REGION is required but not set in $ENV_FILE"
+    VALIDATION_FAILED=true
+fi
+
+# Optional variables with defaults
 MEMORY=${CLOUD_RUN_MEMORY:-1Gi}
 CPU=${CLOUD_RUN_CPU:-1}
-PROJECT_ID=${GCP_PROJECT_ID:-patient-lens-ai-new}
+
+# Use the validated required variables
+REGION="$CLOUD_RUN_REGION"
+PROJECT_ID="$GCP_PROJECT_ID"
+
+if [[ "$VALIDATION_FAILED" == true ]]; then
+    print_error ""
+    print_error "Missing required environment variables in $ENV_FILE"
+    print_error "Required variables:"
+    print_error "  - SERVICE_NAME (e.g., my-api-dev)"
+    print_error "  - GCP_PROJECT_ID (e.g., my-project-123)"
+    print_error "  - CLOUD_RUN_REGION (e.g., asia-south1)"
+    print_error ""
+    print_error "Optional variables (with defaults):"
+    print_error "  - CLOUD_RUN_MEMORY (default: 1Gi)"
+    print_error "  - CLOUD_RUN_CPU (default: 1)"
+    exit 1
+fi
+
+print_success "All required environment variables are set"
 
 print_status "Deployment Configuration:"
 echo "  Service Name: $SERVICE_NAME"
@@ -222,6 +265,44 @@ cleanup_old_revisions "$SERVICE_NAME" "$REGION" 2
 print_status "=== STARTING DEPLOYMENT ==="
 print_status "Deploying to Cloud Run: $SERVICE_NAME"
 
+# Create a temporary env vars file for deployment in YAML format
+TEMP_ENV_FILE=$(mktemp)
+
+# Start YAML content
+echo "# Environment variables for Cloud Run deployment" > "$TEMP_ENV_FILE"
+
+# Add NODE_ENV first
+echo "NODE_ENV: $(escape_yaml_value "$ENVIRONMENT")" >> "$TEMP_ENV_FILE"
+
+# Add other environment variables from the env file if they exist (excluding reserved ones)
+while IFS='=' read -r key value; do
+    # Skip comments, empty lines, and reserved variables
+    if [[ ! "$key" =~ ^[[:space:]]*# ]] && [[ -n "$key" ]] && [[ "$key" != "PORT" ]] && [[ "$key" != "NODE_ENV" ]] && [[ "$key" != "SERVICE_NAME" ]] && [[ "$key" != "GCP_PROJECT_ID" ]] && [[ "$key" != "CLOUD_RUN_REGION" ]] && [[ "$key" != "CLOUD_RUN_MEMORY" ]] && [[ "$key" != "CLOUD_RUN_CPU" ]]; then
+        # Remove any quotes and whitespace from key
+        clean_key=$(echo "$key" | xargs)
+        # Handle value more carefully - preserve content but remove outer quotes if they exist
+        clean_value=$(echo "$value" | sed 's/^["'\'']\(.*\)["'\'']$/\1/')
+        if [[ -n "$clean_value" ]]; then
+            escaped_value=$(escape_yaml_value "$clean_value")
+            echo "$clean_key: $escaped_value" >> "$TEMP_ENV_FILE"
+        fi
+    fi
+done < "$ENV_FILE"
+
+print_status "Environment variables file created at: $TEMP_ENV_FILE"
+print_status "Environment variables YAML content:"
+cat "$TEMP_ENV_FILE" | while read line; do echo "  $line"; done
+
+# Function to cleanup temp file
+cleanup_temp_file() {
+    if [[ -f "$TEMP_ENV_FILE" ]]; then
+        rm -f "$TEMP_ENV_FILE"
+    fi
+}
+
+# Ensure cleanup happens on script exit
+trap cleanup_temp_file EXIT
+
 # Try Docker-based deployment first, fallback to source-based if it fails
 print_status "Attempting Docker-based deployment..."
 
@@ -238,7 +319,7 @@ if gcloud run deploy "$SERVICE_NAME" \
     --min-instances=0 \
     --max-instances=10 \
     --service-account="$SERVICE_ACCOUNT_EMAIL" \
-    --set-env-vars="NODE_ENV=$ENVIRONMENT,PORT=8080" \
+    --env-vars-file="$TEMP_ENV_FILE" \
     --port=8080 \
     --quiet; then
     print_success "Docker-based deployment successful!"
@@ -264,7 +345,7 @@ else
         --min-instances=0 \
         --max-instances=10 \
         --service-account="$SERVICE_ACCOUNT_EMAIL" \
-        --set-env-vars="NODE_ENV=$ENVIRONMENT" \
+        --env-vars-file="$TEMP_ENV_FILE" \
         --port=8080 \
         --quiet; then
         print_success "Source-based deployment successful!"
@@ -301,7 +382,7 @@ if [[ "$DEPLOYMENT_SUCCESS" == true ]]; then
     
     # Clean up old container images
     cleanup_old_images "$SERVICE_NAME" "$PROJECT_ID" 3
-    
+
     print_success "=== DEPLOYMENT AND CLEANUP COMPLETED ==="
     print_status "You can test the API with: curl $SERVICE_URL/health"
     

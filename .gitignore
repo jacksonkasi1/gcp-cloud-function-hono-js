@@ -120,3 +120,6 @@ credential.json
 *-credential.json
 service-account-key.json
 gcp-key.json
+
+.env.production
+.env.development

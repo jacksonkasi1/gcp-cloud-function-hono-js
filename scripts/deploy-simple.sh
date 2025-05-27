@@ -1,10 +1,11 @@
 #!/bin/bash
 
 # =============================================================================
-# Simple Cloud Run Deployment Script with Service Account
+# Cloud Run Deployment Script with Auto-Cleanup
 # =============================================================================
 # This script deploys the Hono.js application to Google Cloud Run
-# using service account credentials for authentication.
+# using service account credentials for authentication and automatically
+# cleans up old deployments, keeping only the last 2 revisions.
 # =============================================================================
 
 set -e
@@ -31,6 +32,107 @@ print_warning() {
 
 print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
+}
+
+# Function to cleanup old revisions
+cleanup_old_revisions() {
+    local service_name=$1
+    local region=$2
+    local keep_count=${3:-2}
+    
+    print_status "Cleaning up old revisions for service: $service_name"
+    
+    # Get all revisions for the service, sorted by creation time (newest first)
+    local revisions=$(gcloud run revisions list \
+        --service="$service_name" \
+        --region="$region" \
+        --format="value(metadata.name)" \
+        --sort-by="~metadata.creationTimestamp" 2>/dev/null || echo "")
+    
+    if [[ -z "$revisions" ]]; then
+        print_status "No existing revisions found for service $service_name"
+        return 0
+    fi
+    
+    # Convert to array
+    local revision_array=($revisions)
+    local total_revisions=${#revision_array[@]}
+    
+    print_status "Found $total_revisions total revisions"
+    
+    if [[ $total_revisions -le $keep_count ]]; then
+        print_status "Only $total_revisions revisions exist, keeping all (target: keep $keep_count)"
+        return 0
+    fi
+    
+    # Calculate how many to delete
+    local delete_count=$((total_revisions - keep_count))
+    print_status "Will delete $delete_count old revisions (keeping newest $keep_count)"
+    
+    # Delete old revisions (skip the first $keep_count newest ones)
+    for ((i=$keep_count; i<$total_revisions; i++)); do
+        local revision_name=${revision_array[$i]}
+        print_status "Deleting old revision: $revision_name"
+        
+        if gcloud run revisions delete "$revision_name" \
+            --region="$region" \
+            --quiet 2>/dev/null; then
+            print_success "Deleted revision: $revision_name"
+        else
+            print_warning "Failed to delete revision: $revision_name (may be in use or already deleted)"
+        fi
+    done
+}
+
+# Function to cleanup old container images
+cleanup_old_images() {
+    local service_name=$1
+    local project_id=$2
+    local keep_count=${3:-3}  # Keep one extra image as safety buffer
+    
+    print_status "Cleaning up old container images for service: $service_name"
+    
+    # List images with the service name tag, sorted by creation time (newest first)
+    local images=$(gcloud container images list-tags \
+        "gcr.io/$project_id/cloud-run-source-deploy/$service_name" \
+        --format="value(digest)" \
+        --sort-by="~timestamp" \
+        --limit=20 2>/dev/null || echo "")
+    
+    if [[ -z "$images" ]]; then
+        print_status "No container images found for service $service_name"
+        return 0
+    fi
+    
+    # Convert to array
+    local image_array=($images)
+    local total_images=${#image_array[@]}
+    
+    print_status "Found $total_images container images"
+    
+    if [[ $total_images -le $keep_count ]]; then
+        print_status "Only $total_images images exist, keeping all (target: keep $keep_count)"
+        return 0
+    fi
+    
+    # Calculate how many to delete
+    local delete_count=$((total_images - keep_count))
+    print_status "Will delete $delete_count old container images (keeping newest $keep_count)"
+    
+    # Delete old images (skip the first $keep_count newest ones)
+    for ((i=$keep_count; i<$total_images; i++)); do
+        local image_digest=${image_array[$i]}
+        local image_url="gcr.io/$project_id/cloud-run-source-deploy/$service_name@$image_digest"
+        
+        print_status "Deleting old container image: $image_digest"
+        
+        if gcloud container images delete "$image_url" \
+            --quiet 2>/dev/null; then
+            print_success "Deleted container image: $image_digest"
+        else
+            print_warning "Failed to delete container image: $image_digest"
+        fi
+    done
 }
 
 # Determine environment
@@ -112,11 +214,18 @@ SERVICE_ACCOUNT_EMAIL=$(python3 -c "import json; print(json.load(open('$CREDENTI
 
 print_status "Using service account: $SERVICE_ACCOUNT_EMAIL"
 
+# Clean up old revisions before deployment
+print_status "=== PRE-DEPLOYMENT CLEANUP ==="
+cleanup_old_revisions "$SERVICE_NAME" "$REGION" 2
+
 # Deploy to Cloud Run
+print_status "=== STARTING DEPLOYMENT ==="
 print_status "Deploying to Cloud Run: $SERVICE_NAME"
 
 # Try Docker-based deployment first, fallback to source-based if it fails
 print_status "Attempting Docker-based deployment..."
+
+DEPLOYMENT_SUCCESS=false
 
 if gcloud run deploy "$SERVICE_NAME" \
     --source=. \
@@ -133,6 +242,7 @@ if gcloud run deploy "$SERVICE_NAME" \
     --port=8080 \
     --quiet; then
     print_success "Docker-based deployment successful!"
+    DEPLOYMENT_SUCCESS=true
 else
     print_warning "Docker-based deployment failed. Trying source-based deployment..."
     
@@ -158,6 +268,7 @@ else
         --port=8080 \
         --quiet; then
         print_success "Source-based deployment successful!"
+        DEPLOYMENT_SUCCESS=true
         
         # Restore Dockerfile
         if [[ -f "Dockerfile.bak" ]]; then
@@ -175,14 +286,34 @@ else
     fi
 fi
 
-if [[ $? -eq 0 ]]; then
+if [[ "$DEPLOYMENT_SUCCESS" == true ]]; then
     print_success "Service deployed successfully!"
     
     # Get service URL
     SERVICE_URL=$(gcloud run services describe "$SERVICE_NAME" --region="$REGION" --format="value(status.url)")
-    
     print_success "Service URL: $SERVICE_URL"
+    
+    # Post-deployment cleanup
+    print_status "=== POST-DEPLOYMENT CLEANUP ==="
+    
+    # Clean up old revisions again (in case the pre-deployment cleanup missed anything)
+    cleanup_old_revisions "$SERVICE_NAME" "$REGION" 2
+    
+    # Clean up old container images
+    cleanup_old_images "$SERVICE_NAME" "$PROJECT_ID" 3
+    
+    print_success "=== DEPLOYMENT AND CLEANUP COMPLETED ==="
     print_status "You can test the API with: curl $SERVICE_URL/health"
+    
+    # Show current revisions
+    print_status "Current active revisions:"
+    gcloud run revisions list \
+        --service="$SERVICE_NAME" \
+        --region="$REGION" \
+        --format="table(metadata.name,status.conditions[0].status,metadata.creationTimestamp)" \
+        --sort-by="~metadata.creationTimestamp" \
+        --limit=5 2>/dev/null || print_warning "Could not list current revisions"
+        
 else
     print_error "Deployment failed!"
     exit 1
